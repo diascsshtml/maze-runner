@@ -4,16 +4,17 @@
 // Постройки Глэйда не перекрывают тайлы целиком — для Томаса их точная форма лежит в COLLIDERS
 function playerPass(x, y) {
   const t = Maze.at(x, y);
-  if (t === T.FLOOR || t === T.EXIT || t === T.GLADE) return true;
+  if (t === T.FLOOR || t === T.EXIT || t === T.GLADE || t === T.IVY) return true;
   if (t === T.GATE) return Game.gate < 0.8;
   return false;
 }
-function grieverPass(x, y) { return Maze.at(x, y) === T.FLOOR; }
+// Сквозь занавес плюща проходят все — и Томас, и гриверы, и бегуны
+function grieverPass(x, y) { const t = Maze.at(x, y); return t === T.FLOOR || t === T.IVY; }
 function npcPass(x, y) { return Maze.at(x, y) === T.GLADE && !decoBlocked(x, y); }
 // Бегуны ходят и по Лабиринту, пока ворота открыты
 function runnerPass(x, y) {
   const t = Maze.at(x, y);
-  if (t === T.FLOOR) return true;
+  if (t === T.FLOOR || t === T.IVY) return true;
   if (t === T.GATE) return Game.gate < 0.5;
   return t === T.GLADE && !decoBlocked(x, y);
 }
@@ -167,7 +168,7 @@ function collidePlayer(p) {
   const R = PLAYER_R * S;
   let px = p.x * S, pz = p.y * S;
   for (const c of COLLIDERS) {
-    if (c.y0 > p.h + 1.7 || c.y1 < p.h + 0.15) continue;     // препятствие выше головы или ниже ног
+    if (c.off || c.y0 > p.h + 1.7 || c.y1 < p.h + 0.15) continue;     // выключенное, выше головы или ниже ног
     const qx = c.round ? c.x : Math.max(c.x0, Math.min(px, c.x1));
     const qz = c.round ? c.z : Math.max(c.z0, Math.min(pz, c.z1));
     const dx = px - qx, dz = pz - qz, d = Math.hypot(dx, dz), min = c.round ? R + c.r : R;
@@ -266,10 +267,13 @@ function updatePlayer(p, dt) {
     p.stamina = Math.min(100, p.stamina + (p.moving ? 12 : 22) * regen * dt);
     if (p.exhausted && p.stamina >= 35) p.exhausted = false;
   }
-  // Тайлов в секунду: шаг ~6 м/с, рывок ~9.6 м/с; в реке, с грузом, раненым или с товарищем на плече — медленнее
+  // Тайлов в секунду: шаг ~6 м/с, рывок ~9.6 м/с; в реке (на броде — чуть быстрее), в грязи, с грузом,
+  // раненым или с товарищем на плече — медленнее
   const wl = waterLevel(p.x * S, p.y * S);
   p.wet = wl !== null && p.h < wl - 0.05;
-  const speed = (p.sprinting ? 2.75 : 1.75) * (f < 0 ? 0.7 : 1) * (p.wet ? 0.5 : 1) * loadFactor() *
+  const wade = p.wet ? (wl - p.h > 0.32 ? 0.5 : 0.72) : 1;
+  const mud = !p.wet && groundMask('mud', p.x * S, p.y * S) > 0.55 && p.h - groundH(p.x * S, p.y * S) < 0.1 ? 0.86 : 1;
+  const speed = (p.sprinting ? 2.75 : 1.75) * (f < 0 ? 0.7 : 1) * wade * mud * loadFactor() *
     (p.bleed > 0 ? 0.85 : 1) * (p.boost > 0 ? 1.15 : 1) * (Squad.escorting ? 0.6 : 1);
   const bx = p.x, by = p.y;
   p.x += mx * speed * dt;
@@ -326,16 +330,43 @@ function downhill(f, x, y, opts) {
   return best;
 }
 
+// Видит ли гривер Томаса: вплотную или по прямому коридору. Огонь в руке видно дальше (свет их притягивает),
+// в грозу — ближе. За стенами Глэйда не видит
+function grieverSees(g, p) {
+  const d = Math.hypot(g.x - p.x, g.y - p.y);
+  if (d < 2.2) return true;
+  const gx = Math.round(g.x), gy = Math.round(g.y), px = Math.round(p.x), py = Math.round(p.y);
+  if (Maze.at(px, py) === T.GLADE) return false;
+  const range = (Game.phase === 'night' ? 8 : 6) + (holdingTorch() ? 4 : 0) - (Weather.storm() ? 2 : 0);
+  if (d > range || (gx !== px && gy !== py)) return false;
+  const sx = Math.sign(px - gx), sy = Math.sign(py - gy);
+  for (let x = gx + sx, y = gy + sy; x !== px || y !== py; x += sx, y += sy) if (!grieverPass(x, y)) return false;
+  return true;
+}
+
 function grieverChoose(g, x, y) {
   const opts = DIRS.filter(d => grieverPass(x + d.x, y + d.y));
   if (!opts.length) return null;
-  const f = Game.field;
+  const f = Game.field, p = Game.player;
   const here = f ? f[y * SIZE + x] : -1;
-  const range = Game.phase === 'night' ? 120 : Weather.storm() ? 12 : 8;
-  g.hunting = here >= 0 && here <= range && !(here > 12 && Math.random() < 0.15);
+  if (grieverSees(g, p)) {
+    g.alert = Game.phase === 'night' ? 10 : 6;
+    g.last = { x: Math.round(p.x), y: Math.round(p.y) };
+  }
+  // Ночью гривер чует Томаса через весь Лабиринт; днём — только если видел его совсем недавно
+  const nightScent = Game.phase === 'night' && here >= 0 && here <= 120 && !(here > 12 && Math.random() < 0.15);
+  g.hunting = here >= 0 && (nightScent || (g.alert || 0) > 0);
   if (g.hunting) {
     const best = downhill(f, x, y, opts);
     if (best) return best;
+  }
+  // Потерял из виду — идёт туда, где видел в последний раз, и принюхивается вокруг
+  if (g.last && (g.searchT || 0) > 0) {
+    if (x === g.last.x && y === g.last.y) g.last = null;
+    else {
+      const best = opts.slice().sort((a, b) => Math.hypot(x + a.x - g.last.x, y + a.y - g.last.y) - Math.hypot(x + b.x - g.last.x, y + b.y - g.last.y))[0];
+      if (best) return best;
+    }
   }
   // Услышал шум — идёт проверить
   const nz = Game.noise;
@@ -354,8 +385,28 @@ function grieverChoose(g, x, y) {
 function updateGriever(g, dt) {
   g.t += dt;
   g.fade = g.leaving ? Math.max(0, g.fade - dt * 0.6) : Math.min(1, g.fade + dt * 0.8);
+  g.flinchCool = Math.max(0, (g.flinchCool || 0) - dt);
+  const wasAlert = (g.alert || 0) > 0;
+  g.alert = Math.max(0, (g.alert || 0) - dt);
+  if (wasAlert && g.alert <= 0 && g.last) {
+    g.searchT = 9;                         // потерял след: рыщет вокруг места, где видел Томаса
+    if (Math.hypot(g.x - Game.player.x, g.y - Game.player.y) < 18) Sound.screech(0.35, { x: tw(g.x), y: 1.4, z: tw(g.y) });
+  }
+  g.searchT = Math.max(0, (g.searchT || 0) - dt);
+  // Огонь в упор: гривер отшатывается (не чаще раза в 12 секунд)
+  const p = Game.player, d = Math.hypot(g.x - p.x, g.y - p.y);
+  if (holdingTorch() && d < 1.6 && g.flinchCool <= 0 && g.fade > 0.6) {
+    const fx = Math.cos(p.yaw), fy = Math.sin(p.yaw);
+    if (((g.x - p.x) * fx + (g.y - p.y) * fy) / Math.max(0.01, d) > 0.55) {
+      g.stun = 1.4;
+      g.flinchCool = 12;
+      Sound.screech(0.7, { x: tw(g.x), y: 1.6, z: tw(g.y) });
+      if (!Game.flinchTold) { Game.flinchTold = true; toast('Гривер отшатнулся от огня! Свет его не убьёт, но задержит на миг.', 'good'); }
+    }
+  }
   if (g.stun > 0) { g.stun -= dt; return; }
-  stepEntity(g, grieverSpeed(g) * dt, grieverChoose, grieverPass);
+  const slow = !g.hunting && g.searchT > 0 ? 0.7 : 1;      // принюхивается — ползёт медленнее
+  stepEntity(g, grieverSpeed(g) * slow * dt, grieverChoose, grieverPass);
   turnToward(g, dt, 6);
 }
 
@@ -441,6 +492,7 @@ function makeNpc(d, i) {
 }
 
 function makeNpcs() {
+  if (Settle.on) return [];              // поселение: жители приходят по одному на Ящике
   let bed = 0;
   return NPC_DATA.map((d, i) => {
     const n = makeNpc(d, i);
@@ -505,6 +557,7 @@ function runnerTarget() {
 function npcGoal(n, p, dt) {
   const ov = npcOverride(n, p);
   if (ov) return ov;
+  if (n.fresh) return freshGoal(n, p);          // новичок из Ящика: осматривается, работы ещё нет
   const evening = Game.phase === 'night' || Game.timeLeft < 24;
   const pTile = Maze.at(Math.round(p.x), Math.round(p.y));
   if (n.role === 'runner' && Game.phase === 'day' && Game.timeLeft > 24) {
@@ -517,10 +570,19 @@ function npcGoal(n, p, dt) {
   if (evening) {
     const outside = Maze.at(Math.round(n.x), Math.round(n.y)) !== T.GLADE;
     const pass = outside ? runnerPass : undefined;
-    // Ночью одни спят в кроватях, другие сидят у костра и сторожат
-    if (n.night === 'sleep' && Game.phase === 'night') {
+    // Ночью одни спят в кроватях, стражи дежурят у ворот, остальные сидят у костра
+    if (n.night === 'guard' && Game.phase === 'night') {
+      const st = stationFor(n.role);
+      if (st) return { x: st.x, y: st.y, act: 'guard', face: st.face, run: outside, pass };
+    }
+    if (n.night === 'sleep' && Game.phase === 'night' && BEDS[n.bed] && isBuilt(BEDS[n.bed].house)) {
       const b = BEDS[n.bed];
       return { x: b.x, y: b.y, act: 'sleep', bed: b, run: outside, pass };
+    }
+    if (Settle.on && !isBuilt('campfire')) {
+      // Костра ещё нет — коротают ночь у Ящика
+      const t = nearestPassable(MID + ((n.seat % 3) - 1) * 2, MID + 2 + (n.seat % 2), npcPass) || LAYOUT.box;
+      return { x: t.x, y: t.y, act: 'idle', lookAt: LAYOUT.box, run: outside, pass };
     }
     const s = SEATS[n.seat % SEATS.length];
     return { x: s.x, y: s.y, act: 'sit', face: LAYOUT.campfire, hurry: Game.phase === 'day', run: outside, pass };
@@ -540,6 +602,8 @@ function npcGoal(n, p, dt) {
     }
     return { x: best.x, y: best.y, act: 'idle', face: { x: best.x * 2 - MID, y: best.y * 2 - MID } };
   }
+  const sw = settlerWorkGoal(n);
+  if (sw) return sw;
   const st = stationFor(n.role);
   if (st) return { x: st.x, y: st.y, act: st.act, face: st.face };
   if (n.role === 'farmer') {

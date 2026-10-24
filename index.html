@@ -147,7 +147,7 @@
     <header class="logo">
       <p class="kicker">Фан-игра по мотивам фильма</p>
       <h1 class="logo-title"><span>Бегущий</span><span>в лабиринте</span></h1>
-      <p class="logo-tag">Ты очнулся в Ящике и ничего не помнишь. Вокруг Глэйд, за стенами — Лабиринт. Где-то в нём есть выход.</p>
+      <p class="logo-tag">Ты очнулся в Ящике и ничего не помнишь. Глэйд пуст: только Башня-дерево, лес и река. Построй поселение, встреть новичков из Ящика — и найди выход из Лабиринта.</p>
     </header>
     <div id="menu-load" class="menu-load">
       <div class="load-bar"><i id="load-fill"></i></div>
@@ -155,7 +155,7 @@
     </div>
     <nav class="menu-list" id="menu-list" aria-label="Главное меню">
       <button class="menu-item primary" id="btn-continue" type="button" hidden><svg class="ico"><use href="#i-play"/></svg><span class="mi-text"><b>Продолжить</b><small id="continue-info"></small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
-      <button class="menu-item" id="btn-start" type="button" disabled><svg class="ico"><use href="#i-box"/></svg><span class="mi-text"><b>Новая игра</b><small>Очнуться в Ящике в новом Лабиринте</small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+      <button class="menu-item" id="btn-start" type="button" disabled><svg class="ico"><use href="#i-box"/></svg><span class="mi-text"><b>Новая игра</b><small>Подняться в Ящике в пустой Глэйд</small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
       <button class="menu-item" id="btn-ngplus" type="button" hidden><svg class="ico"><use href="#i-spark"/></svg><span class="mi-text"><b>Новая игра+</b><small id="ngplus-info"></small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
       <button class="menu-item" id="btn-settings" type="button"><svg class="ico"><use href="#i-gear"/></svg><span class="mi-text"><b>Настройки</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
       <button class="menu-item danger" id="btn-exit" type="button"><svg class="ico"><use href="#i-door"/></svg><span class="mi-text"><b>Выход</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
@@ -212,9 +212,13 @@
         <div class="help-item"><svg class="ico"><use href="#i-sun"/></svg><b>День</b><p>Ворота открыты. Беги в Лабиринт, ищи шесть фрагментов кода, тайники и записки создателей.</p></div>
         <div class="help-item"><svg class="ico"><use href="#i-gate"/></svg><b>Закат</b><p>Вернись, пока ворота не закрылись. Часы справа вверху показывают, сколько осталось.</p></div>
         <div class="help-item"><svg class="ico"><use href="#i-moon"/></svg><b>Ночь</b><p>Выходят гриверы, стены сдвигаются. Спи у костра или в доме — утро придёт быстрее.</p></div>
+        <div class="help-item"><svg class="ico"><use href="#i-hammer"/></svg><b>Выживание</b><p>Собирай хворост и голыши, делай руками топор, кирку и молоток. Топором руби лес, киркой коли валуны, ведром носи воду. Ночью уходят еда, дрова и вода.</p></div>
+        <div class="help-item"><svg class="ico"><use href="#i-box"/></svg><b>Стройка и новички</b><p>В Совете Глэйда закладывай постройки на размеченных участках и работай на них. Каждый пятый день Ящик привозит новичка: познакомься и дай ему работу.</p></div>
         <div class="help-item"><svg class="ico"><use href="#i-home"/></svg><b>Глэйд</b><p>Помогай жителям, строй и улучшай дома, мастери снаряжение. Решения меняют их доверие.</p></div>
         <div class="help-item"><svg class="ico"><use href="#i-compass"/></svg><b>Компас и карта</b><p>Компас вверху ведёт к Глэйду и выходу. Карта открывается по мере бега.</p></div>
         <div class="help-item"><svg class="ico"><use href="#i-code"/></svg><b>Код</b><p>Собери все шесть слов — и на краю Лабиринта откроется выход. Чем закончится побег, зависит от тебя.</p></div>
+        <div class="help-item"><svg class="ico"><use href="#i-beacon"/></svg><b>Секторы и ориентиры</b><p>У каждого из восьми секторов свой облик: плющ, обвалы, ржавые трубы, вода, корни, пепел, светлый камень, следы когтей. Над стенами видны ориентиры — по ним проще не заблудиться. Плющ иногда прячет проход.</p></div>
+        <div class="help-item"><svg class="ico"><use href="#i-drop"/></svg><b>Река</b><p>Перейти можно по мостику, по камням брода или по упавшему дереву. В глубокой воде идёшь медленно, в грязи — тоже.</p></div>
       </div>
       <h3>Клавиши</h3>
       <dl class="keylist" id="help-keys"></dl>
@@ -285,11 +289,17 @@
 <script src="js/walls.js"></script>
 <script src="js/glade.js"></script>
 <script src="js/structures.js"></script>
+<script src="js/settlement.js"></script>
+<script src="js/gather.js"></script>
+<script src="js/settlers.js"></script>
+<script src="js/mazedecor.js"></script>
+<script src="js/intro.js"></script>
 <script src="js/items.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/economy.js"></script>
 <script src="js/crafting.js"></script>
 <script src="js/story.js"></script>
+<script src="js/runners.js"></script>
 <script src="js/secrets.js"></script>
 <script src="js/weather.js"></script>
 <script src="js/squad.js"></script>

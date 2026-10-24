@@ -310,6 +310,21 @@ const Sound = {
     this.tone(660, 1.2, { type: 'triangle', vol: 0.12, delay: 0.4, dest: this.master });
   },
   // Ящик поднимается из шахты: скрежет, лязг цепей и сигнал прибытия
+  // Подъём Ящика: глухой гул шахты, скрежет тросов, низкий вой мотора; stopLift обрывает его при пропуске
+  liftRise(dur) {
+    if (!this.ctx) return;
+    const g = this.ctx.createGain();
+    g.connect(this.out);
+    this.liftGain = g;
+    this.noise(dur, { vol: 0.34, freq: 130, brown: true, dest: g, attack: 1.2 });
+    this.noise(dur, { vol: 0.045, freq: 1100, type: 'bandpass', q: 5, dest: g, attack: 1.5 });
+    this.tone(46, dur, { type: 'sawtooth', vol: 0.05, to: 58, dest: g, attack: 2 });
+  },
+  stopLift() {
+    if (!this.liftGain) return;
+    this.liftGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.25);
+    this.liftGain = null;
+  },
   boxArrives() {
     if (!this.ctx) return;
     const p = this.spot({ x: tw(MID), y: -2, z: tw(MID) }, { ref: 6, roll: 1, life: 7 });

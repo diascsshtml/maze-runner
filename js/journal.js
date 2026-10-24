@@ -148,13 +148,17 @@ function updatePhoto(dt) {
 
 function placeName(x, z) {
   const tx = x / S, ty = z / S;
-  if (Maze.at(Math.round(tx), Math.round(ty)) !== T.GLADE) return `Лабиринт, сектор ${sectorOfTile(Math.round(tx), Math.round(ty))}`;
+  if (Maze.at(Math.round(tx), Math.round(ty)) !== T.GLADE) {
+    const sn = sectorOfTile(Math.round(tx), Math.round(ty));
+    return `Лабиринт, сектор ${sn}${SECTOR_THEMES[sn] ? ' (' + SECTOR_THEMES[sn].name + ')' : ''}`;
+  }
   const spots = [
     ...HOUSES.map(h => ({ name: h.name, x: (h.r.x0 + h.r.x1) / 2, y: (h.r.y0 + h.r.y1) / 2 })),
     { name: 'Башня', ...LAYOUT.tower }, { name: 'Ящик', ...LAYOUT.box }, { name: 'Костёр', ...LAYOUT.campfire },
     { name: 'Кладбище жмуриков', x: (LAYOUT.graveyard.x0 + LAYOUT.graveyard.x1) / 2, y: (LAYOUT.graveyard.y0 + LAYOUT.graveyard.y1) / 2 },
     { name: 'Плантации', x: (LAYOUT.plantations.x0 + LAYOUT.plantations.x1) / 2, y: (LAYOUT.plantations.y0 + LAYOUT.plantations.y1) / 2 },
-    { name: 'Мостик через реку', ...LAYOUT.bridge },
+    { name: 'Мостик через реку', ...LAYOUT.bridge }, { name: 'Брод', ...LAYOUT.ford }, { name: 'Упавшее дерево', ...LAYOUT.log },
+    ...(LAYOUT.nameWall ? [{ name: 'Стена имён', ...LAYOUT.nameWall }] : []),
   ];
   let best = null, bd = 4;
   for (const s of spots) {

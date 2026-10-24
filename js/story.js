@@ -56,7 +56,11 @@ function resetStory(keepNotes = false) {
   for (const d of NPC_DATA) Story.trust[d.name] = START_TRUST[d.name] ?? 50;
   Story.trust['Тереза'] = START_TRUST['Тереза'];
   Story.quests.first = 'active';
+  QUESTS.first = Settle.on
+    ? { title: 'Один в Глэйде', giver: '', text: 'Возьми сумку у Ящика, собери материалы и построй костёр.', done: () => Items.bag > 0 && isBuilt('campfire'), reward: {} }
+    : QUESTS_FIRST_CLASSIC;
 }
+const QUESTS_FIRST_CLASSIC = QUESTS.first;
 
 Object.assign(Story, {
   addTrust(name, v, quiet = false) {
@@ -99,6 +103,7 @@ Object.assign(Story, {
     for (const [id, st] of Object.entries(Story.quests)) {
       const q = QUESTS[id];
       if (st === 'active' && q.done && q.done()) {
+        if (!q.giver) { Story.complete(id); continue; }      // своё задание — засчитывается сразу
         Story.quests[id] = 'ready';
         toast(`«${q.title}» — готово! Вернись к ${q.giver === 'Алби' ? 'Алби' : q.giver}.`, 'good');
       }
@@ -110,6 +115,7 @@ Object.assign(Story, {
       if (q.event || Story.quests[id] || (q.from && Game.day < q.from)) continue;
       if (id === 'notes' && !Game.npcs.some(n => n.name === 'Тереза')) continue;
       if (id !== 'first' && Story.quests.first !== 'done') continue;
+      if (Settle.on && q.giver && !Game.npcs.some(n => n.name === q.giver)) continue;   // того, кто даёт задание, ещё нет
       Story.quests[id] = 'offered';
     }
   },
@@ -131,7 +137,7 @@ Object.assign(Story, {
 
   // Новичок из Ящика, когда в домах есть место
   newcomer() {
-    if (Story.flags.newcomer) return;
+    if (Story.flags.newcomer || Settle.on) return;      // в поселении новички приходят на Ящике раз в пять дней
     Story.flags.newcomer = true;
     const d = NEWCOMER;
     const n = makeNpc(d, Game.npcs.length);
@@ -167,7 +173,7 @@ function npcInFront(p) {
 const ROLE_TITLES = {
   leader: 'Вожак Глэйда', wander: 'Глэйдер', runner: 'Бегун', follower: 'Самый младший в Глэйде', builder: 'Строитель',
   cook: 'Повар', woodcutter: 'Дровосек', farmer: 'Фермер', medjackA: 'Медак', medjackB: 'Медак', smith: 'Кузнец',
-  guard0: 'Страж ворот', guard1: 'Страж ворот', guard2: 'Страж ворот',
+  guard0: 'Страж ворот', guard1: 'Страж ворот', guard2: 'Страж ворот', miner: 'Каменотёс', carrier: 'Водонос',
 };
 const NAME_TITLES = { 'Ньют': 'Правая рука Алби', 'Минхо': 'Страж бегунов', 'Тереза': 'Девушка из Ящика', 'Томми': 'Новичок' };
 function roleTitle(n) { return NAME_TITLES[n.name] || ROLE_TITLES[n.role] || 'Глэйдер'; }
@@ -210,6 +216,15 @@ function renderTalk(body, n) {
   for (let i = 0; i < 10; i++) segs.appendChild(el('i', i < Math.round(t / 10) ? 'on' : ''));
   trust.append(el('span', '', `Доверие ${Math.round(t)} из 100`), segs);
   $('panel-sub').replaceChildren(roleTitle(n), trust);
+
+  // Поселение: знакомство с новичком и работа
+  if (renderSettlerTalk(body, n, opt, say)) { body.append(opts); return; }
+  if (Settle.on && !n.fresh) opt('Сменить работу', () => {
+    body.replaceChildren();
+    opts.replaceChildren();
+    renderJobChoice(body, n, opt, say);
+    body.append(opts);
+  });
 
   // Особые разговоры: выбор с последствиями
   if (n.name === 'Галли' && Story.quests.teresa === 'offered') {

@@ -17,6 +17,8 @@ function tileColor(x, y) {
   if (t === T.WALL) return '#47443d';
   if (t === T.SECRET) return Secrets.hintRoom && Secrets.hintRoom.door.x === x && Secrets.hintRoom.door.y === y ? '#4fb8a4' : '#47443d';
   if (t === T.RUBBLE) return '#7a5e40';
+  if (t === T.IVY) return MazeDecor.ivyFound.has(y * SIZE + x) ? '#5f8a45' : '#47443d';    // проход за плющом — только найденный
+  if (t === T.MARK) return '#d39a3c';
   if (t === T.GLADE) return decoBlocked(x, y) ? '#6b5a40' : '#58884a';
   if (t === T.GATE) return Game.gate > 0.5 ? '#be4637' : '#aa8c5a';
   if (t === T.EXIT) return '#82f5e1';
@@ -65,6 +67,10 @@ function drawMapView(g, x0, y0, n, k, big = false) {
     g.stroke();
   }
   for (const s of Secrets.symbols) if (s.found) dot(s.cell.x + s.d.x * 0.5, s.cell.y + s.d.y * 0.5, k * 0.45, '#f0a64a');
+  // Безопасные пути бегунов — пунктир; цель задания бегунов — флажок
+  for (const path of [...(Story.flags.safePaths || []), Story.flags.trail || []]) for (const t of path) dot(t.x, t.y, k * 0.28, '#9fd2ff');
+  const rq = runnerQuestTarget();
+  if (rq) dot(rq.x, rq.y, k * (0.75 + Math.sin(Game.time * 4) * 0.2), '#ffd166');
   for (const n2 of Squad.members) dot(n2.x, n2.y, k * 0.5, '#9cc06d');
   if (Squad.stranded) dot(Squad.stranded.x, Squad.stranded.y, k * (0.7 + Math.sin(Game.time * 5) * 0.25), '#b6f08a');
   // Номера секторов на большой карте — те же, что на табличках в Лабиринте
@@ -108,7 +114,8 @@ function drawMinimap(dt) {
 /* ---------- окно карты ---------- */
 
 function openMap() {
-  const p = Game.player, sec = Maze.at(Math.round(p.x), Math.round(p.y)) === T.GLADE ? 'Глэйд' : `Сектор ${ROMAN[sectorOfTile(Math.round(p.x), Math.round(p.y)) - 1] || '—'}`;
+  const p = Game.player, sn = sectorOfTile(Math.round(p.x), Math.round(p.y));
+  const sec = Maze.at(Math.round(p.x), Math.round(p.y)) === T.GLADE ? 'Глэйд' : `Сектор ${ROMAN[sn - 1] || '—'}${SECTOR_THEMES[sn] ? ' · ' + SECTOR_THEMES[sn].name : ''}`;
   togglePanel('map', 'Карта Лабиринта', renderMap, { icon: 'i-map', kind: 'map', sub: sec });
 }
 
@@ -191,7 +198,7 @@ function buildCompass() {
   }
   const marks = document.getElementById('compass-marks');
   marks.innerHTML = '';
-  Overlay.marks = [0, 1, 2].map(() => {
+  Overlay.marks = [0, 1, 2, 3].map(() => {
     const m = el('div', 'compass-mark'), ico = svgIcon('i-home'), small = el('small');
     m.append(ico, small);
     m.hidden = true;
@@ -207,7 +214,9 @@ function compassTargets() {
   if (outside) out.push({ x: MID, y: MID, icon: 'i-home', cls: 'home', label: 'Глэйд', urgent: (Game.phase === 'day' && Game.timeLeft < 40) || !!Squad.escorting });
   if (Game.exitOpen) out.push({ x: Maze.exit.x, y: Maze.exit.y, icon: 'i-beacon', cls: 'exit', label: 'Выход', urgent: true });
   if (Squad.stranded && Story.quests.rescue === 'active') out.push({ x: Squad.stranded.x, y: Squad.stranded.y, icon: 'i-people', cls: 'rescue', label: Squad.stranded.name });
-  return out;
+  const q = runnerQuestTarget();
+  if (q) out.push({ x: q.x, y: q.y, icon: 'i-flag', cls: 'rescue', label: q.label });
+  return out.slice(0, 4);
 }
 
 function updateCompass() {

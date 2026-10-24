@@ -51,8 +51,8 @@ function saveGame(quiet = false) {
     },
     life: pick(Life, ['res', 'lvl', 'build', 'season', 'alarm', 'morale', 'fire', 'gateBroken', 'todayEvent']),
     story: { trust: Story.trust, flags: Story.flags, quests: Story.quests, notes: [...Story.notes] },
-    places: Journal.places, weather: Weather.kind,
-    npcs: Game.npcs.map(n => pick(n, ['name', 'x', 'y', 'injured', 'stranded', 'x0', 'y0', 'bed', 'night'])),
+    places: Journal.places, weather: Weather.kind, settle: settleSave(),
+    npcs: Game.npcs.map(n => pick(n, ['name', 'x', 'y', 'injured', 'stranded', 'x0', 'y0', 'bed', 'night', 'role', 'job', 'tool', 'skill', 'fresh'])),
     extra: Game.npcs.filter(n => !NPC_DATA.some(d => d.name === n.name)).map(n => n.name),
   };
   try {
@@ -100,6 +100,8 @@ function applySave(d) {
   Secrets.levers = sc.levers.filter(l => l.room >= 0).map(l => ({ room: Secrets.rooms[l.room], pulled: l.pulled }));
   Secrets.rubble = new Map(sc.rubble.map(k => [k, null]));
   Secrets.hintRoom = sc.hint >= 0 ? Secrets.rooms[sc.hint] : null;
+  settleLoad(d.settle);                // старые сохранения — без поселения: Глэйд отстроен целиком
+  if (Settle.on) Game.npcs = Game.npcs.filter(n => d.npcs.some(s => s.name === n.name) || (d.extra || []).includes(n.name));
   resetWorld();
   Secrets.build();
   clearWorldItems();

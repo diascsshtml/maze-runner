@@ -17,6 +17,36 @@ float gNoise(vec2 p) {
   return mix(mix(gHash(i), gHash(i + vec2(1.0, 0.0)), f.x), mix(gHash(i + vec2(0.0, 1.0)), gHash(i + vec2(1.0, 1.0)), f.x), f.y);
 }`;
 
+// Характер секторов в шейдере: по мировой позиции — номер сектора (как sectorByAngle), у границ — смесь
+// с соседним. A: мох, сырость, ржавчина, копоть; B: лишайник, трещины, пятна, пыль; C: оттенок камня.
+// Стены вокруг самого Глэйда — без темы
+const THEME_A = [[1, 0, 0, 0], [1.7, 0.2, 0, 0], [0.5, 0, 0, 0], [0.6, 0.1, 1, 0], [1.2, 1, 0, 0], [1.4, 0.4, 0, 0], [0.15, 0, 0, 1], [0.3, 0, 0, 0], [0.7, 0.3, 0, 0.25]];
+const THEME_B = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 1, 0, 0.6], [0, 0.3, 0.3, 0], [0, 0, 0.4, 0], [0, 0.2, 0.2, 0], [0, 0.4, 0, 0], [1, 0.2, 0, 0.8], [0, 0.3, 1, 0]];
+const THEME_C = [[1, 1, 1], [0.92, 0.98, 0.88], [1.08, 1.05, 0.98], [1, 0.93, 0.86], [0.82, 0.86, 0.86], [0.95, 0.92, 0.86], [0.8, 0.78, 0.76], [1.18, 1.16, 1.1], [0.78, 0.78, 0.8]];
+const glslArr = (type, rows) => `${type}[${rows.length}](${rows.map(r => `${type}(${r.map(v => v.toFixed(3)).join(', ')})`).join(', ')})`;
+const THEME_GLSL = `
+const vec4 TA[9] = ${glslArr('vec4', THEME_A)};
+const vec4 TB[9] = ${glslArr('vec4', THEME_B)};
+const vec3 TC[9] = ${glslArr('vec3', THEME_C)};
+void themeAt(vec3 wp, out vec4 A, out vec4 B, out vec3 C) {
+  vec2 t = wp.xz / ${S.toFixed(2)} - vec2(${MID.toFixed(1)});
+  float g = 1.0 - step(12.9, max(abs(t.x), abs(t.y)));
+  float a = mod(atan(t.y, t.x) + 1.9634954, 6.2831853) / 0.7853982;
+  float fi = floor(a), fr = a - fi;
+  int s1 = int(fi) + 1;
+  int sn = fr < 0.5 ? (s1 == 1 ? 8 : s1 - 1) : (s1 == 8 ? 1 : s1 + 1);
+  float w = 0.5 * (1.0 - smoothstep(0.0, 0.1, min(fr, 1.0 - fr)));
+  A = mix(mix(TA[s1], TA[sn], w), TA[0], g);
+  B = mix(mix(TB[s1], TB[sn], w), TB[0], g);
+  C = mix(mix(TC[s1], TC[sn], w), TC[0], g);
+}`;
+// Плющ по секторам: сколько (множитель) и какого цвета (в Пепельном — засохший, в Меловом — бледный)
+const IVY_K = [1, 1.9, 0.6, 0.7, 1.1, 1.3, 0.35, 0.5, 0.8];
+const IVY_C = [[1, 1, 1], [1, 1.05, 0.95], [1, 1, 1], [0.95, 0.9, 0.85], [0.85, 0.95, 0.9], [1, 1, 1], [0.9, 0.6, 0.35], [1.05, 1.05, 0.8], [0.7, 0.75, 0.7]];
+// Камни и трава у стен по секторам
+const ROCK_K = [1, 0.8, 2.6, 1, 0.8, 1, 1.2, 1.6, 1];
+const TUFT_K = [1, 2.6, 0.8, 0.6, 1.3, 1.5, 0.15, 0.6, 0.3];
+
 // Высота секции стены: у каждой своя, поэтому верх Лабиринта неровный
 function wallHv(x, y) { return 0.86 + hash3(x, y, 7) * 0.28; }
 
@@ -48,6 +78,9 @@ function patchWorldPos(mat, fragCode, roughCode = '', extra = null) {
       .replace('#include <map_fragment>', '#include <map_fragment>\n' + fragCode)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + roughCode);
   };
+  // Текст обработчика одинаков у всех материалов с этой правкой; без своего ключа three.js отдал бы
+  // земле Глэйда уже собранный шейдер пола Лабиринта (с теми же картами), и тропы с грязью пропали бы
+  mat.customProgramCacheKey = () => 'wp' + fragCode + roughCode;
   return mat;
 }
 
@@ -66,18 +99,33 @@ function wallMaterial(variant) {
   const m = new THREE.MeshStandardMaterial({ map: maps.map, normalMap: maps.normal, roughness: 0.95, envMapIntensity: 0.85, vertexColors: baked });
   m.color.setRGB(...tint);
   return patchWorldPos(m, `
+    vec4 tA, tB; vec3 tC;
+    themeAt(vWPos, tA, tB, tC);
     float wallN = gNoise(vec2(vWPos.x + vWPos.z, vWPos.y * 0.1) * 0.3);
     float streak = gNoise(vec2((vWPos.x + vWPos.z) * 1.6, vWPos.y * 0.025));
-    float damp = 1.0 - smoothstep(0.0, 4.5, vWPos.y);
+    float damp = clamp((1.0 - smoothstep(0.0, 4.5 + tA.y * 6.0, vWPos.y)) * (1.0 + tA.y * 0.5) + tA.y * 0.2, 0.0, 1.0);
     float mn = gNoise(vec2(vWPos.x + vWPos.z, vWPos.y) * 0.16) * 0.65 + gNoise(vec2(vWPos.x - vWPos.z, vWPos.y) * 0.55) * 0.35;
     vec3 mossCol = ${moss ? 'pow(texture2D(mossMap, vUv * 1.5).rgb, vec3(2.2))' : 'vec3(0.05, 0.08, 0.025)'};
-    float mossMask = clamp(smoothstep(0.58, 0.78, mn) * 0.85 + damp * smoothstep(0.3, 0.55, mn), 0.0, 1.0);
+    float mossMask = clamp((smoothstep(0.58, 0.78, mn) * 0.85 + damp * smoothstep(0.3, 0.55, mn)) * tA.x, 0.0, 1.0);
+    diffuseColor.rgb *= tC;
     diffuseColor.rgb *= mix(1.0, 0.55, damp * 0.8);
     diffuseColor.rgb *= 0.8 + 0.3 * wallN;
     diffuseColor.rgb *= 1.0 - 0.32 * smoothstep(0.55, 0.9, streak) * smoothstep(4.0, ${WALL_H.toFixed(1)}, vWPos.y + 6.0);
+    // Ржавые потёки сверху вниз (от труб и креплений), копоть снизу, лишайник пятнами, трещины, тёмные пятна, пыль
+    float rust = smoothstep(0.55, 0.85, gNoise(vec2((vWPos.x + vWPos.z) * 2.2, vWPos.y * 0.06))) * (0.4 + 0.6 * smoothstep(0.0, 14.0, vWPos.y)) * tA.z;
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.13, 0.05), rust * 0.75);
+    float soot = tA.w * (1.0 - smoothstep(0.0, 5.0 + 9.0 * gNoise(vec2(vWPos.x + vWPos.z, 1.0) * 0.45), vWPos.y));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.025, 0.022, 0.02), clamp(soot, 0.0, 1.0) * 0.88);
+    float lichen = smoothstep(0.62, 0.7, gNoise(vec2(vWPos.x + vWPos.z, vWPos.y) * 0.9)) * tB.x;
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.7, 0.71, 0.6), lichen * 0.75);
+    float crack = 1.0 - smoothstep(0.0, 0.022, abs(gNoise(vec2(vWPos.x + vWPos.z, vWPos.y * 0.6) * 0.8) - 0.5));
+    diffuseColor.rgb *= 1.0 - crack * tB.y * 0.65;
+    float stain = smoothstep(0.55, 0.8, gNoise(vec2(vWPos.x - vWPos.z, vWPos.y * 0.3) * 0.5)) * tB.z;
+    diffuseColor.rgb *= 1.0 - stain * 0.45;
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.59, 0.54), tB.w * 0.25 * (1.0 - damp));
     diffuseColor.rgb = mix(diffuseColor.rgb, mossCol * 0.85, mossMask);`,
-  'roughnessFactor *= mix(1.0, 0.7, damp);',
-  moss ? { uniforms: { mossMap: { value: moss.map } }, decl: 'uniform sampler2D mossMap;\n' } : null);
+  'roughnessFactor *= mix(1.0, 0.7, damp) * (1.0 - tA.y * 0.4);',
+  { uniforms: moss ? { mossMap: { value: moss.map } } : {}, decl: (moss ? 'uniform sampler2D mossMap;\n' : '') + THEME_GLSL + '\n' });
 }
 
 function initWalls(scene, density) {
@@ -131,9 +179,25 @@ function initWalls(scene, density) {
     texM = S;
   }
   const floorMat = new THREE.MeshStandardMaterial({ color: ASSETS.real ? 0xffffff : srgb('#9c968b'), map: floorMaps.map, normalMap: floorMaps.normal, roughness: 0.92, aoMap: Walls.ao, aoMapIntensity: 1, envMapIntensity: 0.5 });
+  // Пол по секторам: трава в Плющевом, пыль и щебень в Обвальном, ржавые разводы, стоячая вода в Сыром,
+  // пепел в Пепельном, светлая пыль в Меловом, тёмная слизь в Когтистом
   patchWorldPos(floorMat, `
+    vec4 tA, tB; vec3 tC;
+    themeAt(vWPos, tA, tB, tC);
     float fN = gNoise(vWPos.xz * 0.15);
-    diffuseColor.rgb *= 0.8 + 0.3 * fN;`);
+    diffuseColor.rgb *= (0.8 + 0.3 * fN) * tC;
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.7, 0.95, 0.55), clamp(tA.x - 1.0, 0.0, 1.0) * smoothstep(0.35, 0.7, gNoise(vWPos.xz * 0.6)));
+    float pud = smoothstep(0.52, 0.6, gNoise(vWPos.xz * 0.32) * 0.75 + gNoise(vWPos.xz * 1.3) * 0.25) * tA.y;
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.3, 0.33, 0.32), pud * 0.85);
+    float frust = smoothstep(0.6, 0.8, gNoise(vWPos.xz * 0.5 + 3.0)) * tA.z;
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.15, 0.07), frust * 0.6);
+    float ash = smoothstep(0.35, 0.65, gNoise(vWPos.xz * 0.4 + 7.0)) * tA.w;
+    diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.3, 0.29, 0.28), vec3(0.04, 0.035, 0.03), smoothstep(0.5, 0.8, gNoise(vWPos.xz * 1.7))), ash * 0.85);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.66, 0.63, 0.57), tB.w * 0.35 * smoothstep(0.3, 0.7, gNoise(vWPos.xz * 0.7 + 1.0)));
+    float slime = smoothstep(0.6, 0.75, gNoise(vec2(vWPos.x * 0.6, vWPos.z * 2.5))) * tB.z;
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.05, 0.07, 0.04), slime * 0.6);`,
+  'roughnessFactor = mix(roughnessFactor, 0.05, pud); roughnessFactor = mix(roughnessFactor, 0.3, slime * 0.7);',
+  { uniforms: {}, decl: THEME_GLSL + '\n' });
   // Пол Лабиринта — четыре полосы вокруг Глэйда: внутри Глэйда своя земля с рельефом и рекой ниже нуля
   const lo = (-AO_MARGIN - 0.5) * S, hi = (SIZE - 1 + AO_MARGIN + 0.5) * S;
   const g0 = (GLADE_T0 - 0.5) * S, g1 = (GLADE_T1 + 0.5) * S;
@@ -196,11 +260,13 @@ function rebuildIvy() {
   for (let y = 0; y < SIZE && n < cap; y++) {
     for (let x = 0; x < SIZE && n < cap; x++) {
       const i = y * SIZE + x;
+      if (Maze.tiles[i] === T.IVY) { n = ivyCurtain(mesh, n, cap, x, y); continue; }
       if (!isSolid(Maze.tiles[i]) || Walls.h[i] < 1) continue;
+      const sec = sectorOfTile(x, y), ic = IVY_C[sec];
       DIRS.forEach((d, f) => {
         if (n >= cap || !isOpen(x + d.x, y + d.y)) return;
         const glade = Maze.at(x + d.x, y + d.y) === T.GLADE;
-        const vines = Math.floor(hash3(x, y, f) * (glade ? 3.4 : 2.4) * Walls.density + 0.2);
+        const vines = Math.floor(hash3(x, y, f) * (glade ? 3.4 : 2.4 * IVY_K[sec]) * Walls.density + 0.2);
         const top = WALL_H * wallHv(x, y);
         // Плющ на макушке стены, у края
         for (let c = 0; c < 4 && n < cap; c++) {
@@ -214,7 +280,7 @@ function rebuildIvy() {
           _scl.set(s, s, s);
           _m4.compose(_pos, _quat, _scl);
           mesh.setMatrixAt(n, _m4);
-          _col.setRGB(0.8 + q(6) * 0.3, 0.9 + q(7) * 0.2, 0.75);
+          _col.setRGB((0.8 + q(6) * 0.3) * ic[0], (0.9 + q(7) * 0.2) * ic[1], 0.75 * ic[2]);
           mesh.setColorAt(n++, _col);
         }
         _eul.order = 'XYZ';
@@ -238,7 +304,7 @@ function rebuildIvy() {
             _m4.compose(_pos, _quat, _scl);
             mesh.setMatrixAt(n, _m4);
             const g = 0.75 + hash3(n, n, x) * 0.45;
-            _col.setRGB(g * (0.9 + hash3(y, n, 1) * 0.2), g, g * 0.85);
+            _col.setRGB(g * (0.9 + hash3(y, n, 1) * 0.2) * ic[0], g * ic[1], g * 0.85 * ic[2]);
             mesh.setColorAt(n, _col);
             n++;
           }
@@ -251,6 +317,31 @@ function rebuildIvy() {
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
 }
 
+// Занавес из плюща в тайном проходе: густые листья во весь проём до перемычки, с обеих сторон
+const IVY_GAP = 4.6;
+function ivyCurtain(mesh, n, cap, x, y) {
+  const along = isOpen(x, y - 1) && isOpen(x, y + 1);          // проход вдоль Y — занавес поперёк, в плоскости X
+  for (const side of [-1, 1]) {
+    for (let u = -1.45; u <= 1.46 && n < cap; u += 0.58) {
+      for (let h = 0.35; h < IVY_GAP + 0.3 && n < cap; h += 0.5) {
+        const r = k => hash3(x * 13 + Math.round(u * 10), y * 7 + Math.round(h * 10) + side, k + 90);
+        const off = side * (0.05 + r(1) * 0.25);
+        _pos.set(x * S + (along ? u + (r(2) - 0.5) * 0.3 : off), h + (r(3) - 0.5) * 0.3, y * S + (along ? off : u + (r(2) - 0.5) * 0.3));
+        _quat.setFromEuler(_eul.set((r(4) - 0.5) * 0.6, (along ? 0 : Math.PI / 2) + (r(5) - 0.5) * 0.5, r(6) * 6.28, 'YXZ'));
+        const sc = 1.15 + r(7) * 0.5;
+        _scl.set(sc, sc, sc);
+        _m4.compose(_pos, _quat, _scl);
+        mesh.setMatrixAt(n, _m4);
+        const g = 0.5 + r(8) * 0.35;                       // в тени проёма листья темнее, чем на солнечной стене
+        _col.setRGB(g * 0.9, g, g * 0.78);
+        mesh.setColorAt(n++, _col);
+      }
+    }
+  }
+  _eul.order = 'XYZ';
+  return n;
+}
+
 // Камни и трава у основания стен в коридорах
 function rebuildDebris() {
   let nr = 0, nt = 0;
@@ -258,9 +349,10 @@ function rebuildDebris() {
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
       if (Maze.at(x, y) !== T.FLOOR) continue;
+      const sec = sectorOfTile(x, y);
       DIRS.forEach((d, f) => {
         if (Maze.at(x + d.x, y + d.y) !== T.WALL) return;
-        const count = Math.floor(hash3(x, y, f + 10) * 3.5);
+        const count = Math.floor(hash3(x, y, f + 10) * 3.5 * ROCK_K[sec]);
         for (let k = 0; k < count && nr < capR; k++) {
           const r = j => hash3(x * 3 + k, y * 5 + f, j);
           const along = (r(1) - 0.5) * S * 0.9, out = S / 2 - 0.15 - r(2) * 0.5;
@@ -271,7 +363,7 @@ function rebuildDebris() {
           _m4.compose(_pos, _quat, _scl);
           Walls.rocks.setMatrixAt(nr++, _m4);
         }
-        const tufts = Math.floor(hash3(x, y, f + 20) * 6 * Walls.density);
+        const tufts = Math.floor(hash3(x, y, f + 20) * 6 * Walls.density * TUFT_K[sec]);
         for (let k = 0; k < tufts && nt < capT; k++) {
           const r = j => hash3(x * 11 + k, y * 3 + f, j + 40);
           const along = (r(1) - 0.5) * S, out = S / 2 - 0.1 - r(2) * r(2) * 1.2;
@@ -301,6 +393,7 @@ function resetWalls() {
   rebuildAO();
   rebuildIvy();
   rebuildDebris();
+  rebuildMazeDecor(true);
 }
 
 // Стены растут из земли или уходят в неё; рядом с игроком летит пыль и сыплются камни
@@ -323,6 +416,7 @@ function updateWalls(dt, px, pz) {
     rebuildAO();
     rebuildIvy();
     rebuildDebris();
+    rebuildMazeDecor(false);
   }
   Walls.wasAnimating = animating;
   if (!animating && !Walls.dirty) return;
@@ -330,11 +424,12 @@ function updateWalls(dt, px, pz) {
   const counts = [0, 0, 0];
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
-      const h = Walls.h[y * SIZE + x];
-      if (h <= 0.001) continue;
+      const h = Walls.h[y * SIZE + x], ivy = Maze.tiles[y * SIZE + x] === T.IVY;
+      if (h <= 0.001 && !ivy) continue;
       const v = Math.floor(hash3(x, y, 1) * 3), mesh = Walls.meshes[v];
-      _pos.set(x * S, 0, y * S);
-      _scl.set(1, h * wallHv(x, y), 1);
+      // Над проходом за плющом стена продолжается перемычкой
+      _pos.set(x * S, ivy ? IVY_GAP : 0, y * S);
+      _scl.set(1, ivy ? (WALL_H * wallHv(x, y) - IVY_GAP) / WALL_H : h * wallHv(x, y), 1);
       _m4.compose(_pos, _quat.identity(), _scl);
       mesh.setMatrixAt(counts[v], _m4);
       const l = 0.86 + hash3(x, y, 2) * 0.22;

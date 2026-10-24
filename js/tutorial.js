@@ -1,7 +1,7 @@
 // Обучение для новичка: подсказки по шагам в углу экрана. Шаг засчитывается, когда игрок это сделал.
 // Пройденное обучение запоминается; выключается в настройках («Подсказки и обучение»).
 
-const TUTORIAL = [
+const TUTORIAL_CLASSIC = [
   { text: 'Осмотрись: кликни по экрану и двигай мышью.', done: () => Tutorial.looked > 400 },
   { text: 'Иди: {forward}{left}{back}{right}. Рывок — {sprint}, прыжок — {jump}, следи за полоской сил.', done: () => Tutorial.walked > 8 },
   { text: 'Рядом с Ящиком лежит сумка. Подойди и нажми {action}.', done: () => Items.bag > 0 },
@@ -12,21 +12,37 @@ const TUTORIAL = [
   { text: 'Днём ворота открыты. Выйди в Лабиринт: ищи фрагменты кода, но вернись до заката!', done: () => Tutorial.flags.maze },
 ];
 
+// Новая игра в пустом Глэйде: собрать материалы, сделать топор, заложить и построить костёр, выйти в Лабиринт
+const TUTORIAL_SETTLE = [
+  { text: 'Осмотрись: кликни по экрану и двигай мышью.', done: () => Tutorial.looked > 400 },
+  { text: 'Иди: {forward}{left}{back}{right}. Рывок — {sprint}, прыжок — {jump}, следи за полоской сил.', done: () => Tutorial.walked > 8 },
+  { text: 'У Ящика лежит сумка. Подойди и нажми {action}.', done: () => Items.bag > 0 },
+  { text: 'Собери хворост: встань лицом к дереву и нажми {action}. Нужно 3 дерева.', done: () => Life.res.wood >= 3 || hasItem('axe') },
+  { text: 'У кромки реки собери голыши ({action}). Нужно 2 камня.', done: () => Life.res.stone >= 2 || hasItem('axe') },
+  { text: 'Открой ремесло ({craft}) и сделай топор — дрова пойдут вдвое быстрее.', done: () => hasItem('axe') || Tutorial.flags['craft-axe'] },
+  { text: 'Открой Совет Глэйда ({glade}) и заложи костёр: дерево 6, камень 8.', done: () => !!Settle.sites.campfire || isBuilt('campfire') },
+  { text: 'Работай на участке костра ({action}), пока он не будет готов. Молоток ускоряет стройку.', done: () => isBuilt('campfire') },
+  { text: 'Днём ворота открыты. В Лабиринте лежат металлолом и фрагменты кода — но вернись до заката!', done: () => Tutorial.flags.maze },
+  { text: 'Каждый пятый день Ящик привозит новичка. Строй спальни и столовую — жители помогут с работой.', done: () => (Tutorial.lastT = (Tutorial.lastT || 0) + 1) > 900 },
+];
+const TUTORIAL_KEY = () => Settle.on ? 'maze-runner-tutorial-settle' : 'maze-runner-tutorial';
+function tutorialSteps() { return Settle.on ? TUTORIAL_SETTLE : TUTORIAL_CLASSIC; }
+
 const Tutorial = { step: 0, looked: 0, walked: 0, flags: {}, lastWalk: 0 };
 
 Object.assign(Tutorial, {
   load() {
-    try { Tutorial.step = +(localStorage.getItem('maze-runner-tutorial') || 0); } catch (e) { Tutorial.step = 0; }
+    try { Tutorial.step = +(localStorage.getItem(TUTORIAL_KEY()) || 0); } catch (e) { Tutorial.step = 0; }
   },
   save() {
-    try { localStorage.setItem('maze-runner-tutorial', String(Tutorial.step)); } catch (e) { /* без сохранения */ }
+    try { localStorage.setItem(TUTORIAL_KEY(), String(Tutorial.step)); } catch (e) { /* без сохранения */ }
   },
   restart() {
     Object.assign(Tutorial, { step: 0, looked: 0, walked: 0, flags: {} });
     Tutorial.save();
   },
   skip() {
-    Tutorial.step = TUTORIAL.length;
+    Tutorial.step = tutorialSteps().length;
     Tutorial.save();
     Tutorial.render();
   },
@@ -37,7 +53,7 @@ Object.assign(Tutorial, {
     Tutorial.walked += Math.max(0, p.walk - Tutorial.lastWalk);
     Tutorial.lastWalk = p.walk;
     if (playerTile() !== T.GLADE) Tutorial.flags.maze = true;
-    const s = TUTORIAL[Tutorial.step];
+    const s = tutorialSteps()[Tutorial.step];
     if (s && s.done()) {
       Tutorial.step++;
       Tutorial.save();
@@ -47,14 +63,14 @@ Object.assign(Tutorial, {
   },
   render() {
     const box = $('tip');
-    const s = TUTORIAL[Tutorial.step];
-    const show = !!s && Settings.hints && Game.state === 'play' && Game.intro <= 0;
+    const s = tutorialSteps()[Tutorial.step];
+    const show = !!s && Settings.hints && Game.state === 'play' && Game.intro <= 0 && !Lift.active;
     box.hidden = !show;
     if (!show) return;
     const text = s.text.replace(/\{(\w+)\}/g, (m, k) => keyLabel(Settings.keys[k]));
     if (box.dataset.text !== text) {
       box.dataset.text = text;
-      $('tip-step').textContent = `Обучение · ${Tutorial.step + 1} из ${TUTORIAL.length}`;
+      $('tip-step').textContent = `Обучение · ${Tutorial.step + 1} из ${tutorialSteps().length}`;
       $('tip-text').textContent = text;
     }
   },

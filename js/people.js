@@ -88,6 +88,15 @@ function placeTool(m, toolType) {
 }
 
 // Инструмент из Blender (топор, молоток, мотыга, половник, копьё) или запасной из примитивов
+// Житель сменил работу — в руке другой инструмент
+function refreshNpcTool(n) {
+  const m = PEOPLE.npcs.get(n);
+  if (!m) return;
+  if (m.tool) World.scene.remove(m.tool);
+  m.tool = n.tool ? toolModel(n.tool) : null;
+  if (m.tool) World.scene.add(m.tool);
+}
+
 function toolModel(type) {
   const src = ASSETS.models['tool_' + type];
   if (!src) return makeTool(type);
@@ -324,7 +333,19 @@ function initFirstPerson() {
     arm.rotation.set(0.35, 0.1, 0);
     fp.add(arm);
   }
-  PEOPLE.fp = { group: fp, arm, grip, itemType: null, item: null, sway: 0 };
+  // Левая рука — зеркальная копия правой: видна, когда работаешь, бежишь или лезешь по лестнице
+  let left = null;
+  if (arm) {
+    left = new THREE.Group();
+    left.position.set(-0.22, -0.3, -0.18);
+    const armL = arm.clone(true);
+    armL.scale.x = -1;
+    armL.rotation.set(0.35, -0.1, 0);
+    left.add(armL);
+    left.visible = false;
+    World.camera.add(left);
+  }
+  PEOPLE.fp = { group: fp, arm, grip, left, itemType: null, item: null, sway: 0 };
 }
 
 function updateFirstPerson(dt) {
@@ -349,16 +370,33 @@ function updateFirstPerson(dt) {
       if (type === 'bag' || type === 'flask' || type === 'apple') F.item.position.y = -0.02;
       if (type === 'crowbar') F.item.position.set(0, -0.02, -0.24);   // лом держат за конец
       if (type === 'herb') F.item.scale.setScalar(0.6);
+      // Инструменты смоделированы стоймя: держим за черенок, головка вверх-вперёд
+      if (['axe', 'pickaxe', 'hammer'].includes(type)) { F.item.rotation.set(-1.2, 0, 0.15); F.item.position.set(0, -0.06, 0.06); }
+      if (type === 'bucket') { F.item.position.set(0, -0.42, 0.05); F.item.scale.setScalar(0.85); }
+      if (type === 'stew') F.item.position.y = -0.03;
       if (type === 'note' || type === 'keycard' || type === 'watch') F.item.rotation.x = 0.9;    // разворачиваем к глазам
       F.grip.add(F.item);
     }
     F.itemType = type;
   }
-  F.group.visible = !!type && Game.state === 'play' && !p.climb;
+  // Правая рука видна всегда (с предметом или пустая), левая — в работе, на бегу и на лестнице
+  F.group.visible = Game.state === 'play' && !Lift.active && (!!type || !!F.arm);
+  if (F.item) F.item.visible = !p.climb;
   // Покачивание руки при ходьбе и беге
   const bob = p.moving ? Math.sin(p.walk * S * (p.sprinting ? 1.7 : 2.1)) : 0;
   F.sway += ((Input.lookX || 0) * -0.0005 - F.sway) * Math.min(1, dt * 8);
   F.group.position.set(0.22 + bob * 0.012 + F.sway, -0.3 + Math.abs(bob) * (p.sprinting ? 0.03 : 0.015), -0.18);
+  // Взмах инструментом при работе (рубка, кирка, стройка)
+  const sw = Math.max(Gather.swing, Settle.swing || 0);
+  F.group.rotation.x = sw > 0 ? Math.sin(sw * Math.PI) * 0.9 : 0;
+  if (F.left) {
+    const both = !!(Gather.work || Settle.work || p.climb || p.sprinting);
+    F.left.visible = F.group.visible && both;
+    const climbK = p.climb ? Math.sin(p.walk * S * 3) * 0.09 : 0, run = p.sprinting ? -bob * 0.05 : 0;
+    F.left.position.set(-0.22 - bob * 0.012 + F.sway, -0.3 - climbK + run + (p.climb ? 0.12 : 0), -0.18);
+    F.left.rotation.x = sw > 0 ? Math.sin(sw * Math.PI) * 0.6 : p.climb ? 0.5 : 0;
+    if (p.climb) F.group.position.y += climbK + 0.12;
+  }
   if ((type === 'torch' || type === 'lantern') && h.fuel > 0 && F.item && Game.state === 'play') {
     F.item.getWorldPosition(_bv1);
     _bv2.set(0, type === 'torch' ? 0 : 0.12, type === 'torch' ? -0.42 : 0).applyQuaternion(F.item.getWorldQuaternion(_bq)).add(_bv1);

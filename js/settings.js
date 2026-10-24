@@ -22,7 +22,7 @@ const KEY_ACTIONS = [
 ];
 
 const SETTING_DEFAULTS = {
-  sens: 1, invertY: false, fov: 72, volMaster: 0.8, volWorld: 1, volUI: 0.7, hints: true,
+  sens: 1, invertY: false, fov: 72, volMaster: 0.8, volWorld: 1, volUI: 0.7, hints: true, skipIntro: false,
   brightness: 1, headBob: true, uiScale: 1, keyHints: true, muted: false,
 };
 const Settings = { ...SETTING_DEFAULTS, keys: Object.fromEntries(KEY_ACTIONS.map(a => [a.id, a.key])) };
@@ -232,6 +232,7 @@ function renderSettings() {
     row('Масштаб интерфейса', 'Крупнее или мельче все надписи и кнопки', slider('uiScale', 0.85, 1.3, 0.05, pct));
     row('Подсказки клавиш на экране', 'Справа внизу: сумка, журнал, карта, пауза', toggle('keyHints'));
     row('Обучение и подсказки', 'Советы новичку в углу экрана', toggle('hints'));
+    row('Пропускать вступление', 'Новая игра сразу у Ящика, без подъёма в шахте', toggle('skipIntro'));
     const reset = document.createElement('button');
     reset.type = 'button';
     reset.className = 'btn ghost small';

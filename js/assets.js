@@ -16,7 +16,17 @@ const ASSET_LIST = {
     'wall_0', 'wall_1', 'wall_2', 'gate_a', 'gate_b', 'rubble', 'trap_plate', 'lever', 'plaque', 'code_stand', 'griever',
     // Глэйд: Ящик, факелы, скамьи, загон, поленница, стройка, Кутузка, грядки и живность
     'box_lift', 'torch_post', 'bench_log', 'fence', 'trough', 'hay_bale', 'woodpile', 'scaffold', 'slammer',
-    'crop_corn', 'crop_tomato', 'crop_pumpkin', 'scarecrow', 'bird', 'crow', 'rabbit', 'pig', 'chicken'],
+    'crop_corn', 'crop_tomato', 'crop_pumpkin', 'scarecrow', 'bird', 'crow', 'rabbit', 'pig', 'chicken',
+    // Новые постройки, рельеф и следы жизни: корни, камыш, бревно-переход, тачка, телега, инструменты, утварь
+    'house_pantry', 'house_shed', 'house_medhut', 'roots_flare', 'root_arc', 'reeds', 'log_fallen',
+    'wheelbarrow', 'cart', 'tools_lean', 'tools_ground', 'bucket', 'basket', 'laundry_line', 'sign_post', 'sign_board',
+    'hammock', 'clothes_pile', 'firepit_small', 'bench_simple', 'cauldron', 'dishes', 'butcher_table', 'meat_rack',
+    'tool_rack', 'weapon_rack', 'rug', 'cot', 'herb_rack', 'jar_shelf', 'map_table',
+    // Лабиринт: ориентиры секторов и приметы участков
+    'lm_tree_giant', 'lm_tree_dead', 'lm_mast', 'lm_column', 'lm_gear', 'lm_slab', 'lm_pool', 'lm_camp',
+    'pipe_run', 'floor_grate', 'wall_roots', 'concrete_chunks',
+    // Выживание: кирка, похлёбка, частокол, бочка для дождя
+    'tool_pickaxe', 'item_stew', 'palisade', 'rain_barrel'],
 };
 
 const ASSETS = { tex: {}, models: {}, gltf: {}, leaves: null, real: false, blocked: location.protocol === 'file:' };
@@ -78,7 +88,8 @@ function loadAssets(onProgress) {
   }
   for (const id of ASSET_LIST.blender) {
     // Хижины и мебель в них: дерево без мха (деревья, Башня и мост остаются замшелыми)
-    const indoor = id.startsWith('house_') || ['bed', 'table_long', 'shelf', 'chest', 'workbench', 'stool', 'mapboard', 'barrel'].includes(id);
+    const indoor = id.startsWith('house_') || ['bed', 'table_long', 'shelf', 'chest', 'workbench', 'stool', 'mapboard', 'barrel',
+      'cot', 'jar_shelf', 'map_table', 'tool_rack', 'butcher_table', 'meat_rack', 'weapon_rack', 'bench_simple'].includes(id);
     jobs.push(loadModel(id, 'assets/blender').then(g => {
       g.scene.traverse(o => {
         if (!o.isMesh) return;
@@ -88,6 +99,8 @@ function loadAssets(onProgress) {
           if (m.name === 'leaves') { m.alphaTest = 0.5; m.transparent = false; m.side = THREE.DoubleSide; }
           if (m.name === 'ember') m.emissiveIntensity = 3;
           if (m.name === 'sensor') m.emissiveIntensity = 2.5;
+          if (m.name === 'beacon') m.emissiveIntensity = 4;
+          if (m.name === 'flame') m.emissiveIntensity = 3;
           if (indoor && m.name === 'bark') weatheredWood(m, 0.35, '1.16, 0.95, 0.72');
           if (indoor && m.name === 'planks') weatheredWood(m, 0.8, '1.12, 0.96, 0.78');
         }

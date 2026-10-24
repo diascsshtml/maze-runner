@@ -18,6 +18,11 @@ const ITEM_DEFS = {
   bandage: { name: 'Бинт', model: 'item_bandage', w: 0.1, hint: 'F — остановить кровь, +1 жизнь' },
   watch: { name: 'Часы', model: 'item_watch', w: 0.2, hint: 'точное время до заката' },
   map: { name: 'Карта бегунов', model: 'item_map', w: 0.1 },
+  axe: { name: 'Топор', model: 'tool_axe', w: 1.4, hint: 'E у дерева — рубить дрова, по 2 за раз' },
+  pickaxe: { name: 'Кирка', model: 'tool_pickaxe', w: 2.0, hint: 'E у валуна — колоть камень' },
+  hammer: { name: 'Молоток', model: 'tool_hammer', w: 0.8, hint: 'на стройке работаешь вдвое быстрее' },
+  bucket: { name: 'Ведро', model: 'bucket', w: 1.0, hint: 'E у реки — 4 воды на склад; F у горящего дома — тушить' },
+  stew: { name: 'Похлёбка', model: 'item_stew', w: 0.5, hint: 'F — съесть: все силы, голод до утра не страшен' },
   scrap: { name: 'Металлолом', model: 'item_scrap', w: 1.5, hint: 'сдай на склад — будет металл' },
   herb: { name: 'Травы', model: 'item_herb', w: 0.1, hint: 'сдай на склад — медакам на бинты' },
   gear: { name: 'Шестерня', model: 'item_gear', w: 0.5, hint: 'деталь механизма — из неё делают часы' },
@@ -102,7 +107,7 @@ function clearWorldItems() {
 function resetItems() {
   clearWorldItems();
   Object.assign(Items, { inv: [], held: -1, bag: 0, near: null, mapRead: false });
-  for (const s of ITEM_SPAWNS) spawnWorldItem(s.type, s.x, s.y, s.z);
+  for (const s of ITEM_SPAWNS) if (!s.struct || isBuilt(s.struct)) spawnWorldItem(s.type, s.x, s.y, s.z);
   updateHotbar();
 }
 
@@ -204,6 +209,15 @@ function useHeld() {
     p.boost = 60;
     consumeHeld();
     toast('Паёк бегуна: силы полные, минуту бежишь быстрее.', 'good');
+  } else if (h.type === 'stew') {
+    p.stamina = 100;
+    p.exhausted = false;
+    Life.hunger = false;
+    consumeHeld();
+    toast('Горячая похлёбка: силы полные, голод отступил.', 'good');
+  } else if (h.type === 'bucket') {
+    if (douse(p)) { douse(p); toast('Целое ведро воды на огонь!', 'good'); }
+    else toast('Ведро: E у реки — набрать воды на склад.', 'info');
   } else if (h.type === 'bandage') {
     if (!p.bleed && p.hearts >= 3) { toast('Ты цел — бинт пока не нужен.', 'info'); return; }
     p.bleed = 0;
@@ -277,8 +291,13 @@ const ITEM_INFO = {
   herb: 'Пучок лечебных трав из леса Глэйда. Медаки делают из них бинты.',
   gear: 'Шестерня из механизма Лабиринта. Из неё в мастерской собирают часы.',
   keycard: 'Пластиковая карта с буквами ПОРОК. Откуда она здесь — и что открывает?',
+  axe: 'Каменный топор на крепком черенке. Дерево рубит по два полена за раз — без него остаётся собирать хворост.',
+  pickaxe: 'Кирка с железным клювом. Колет валуны на камень для костра, фундаментов и частокола.',
+  hammer: 'Молоток для стройки. С ним работа на участке идёт вдвое быстрее, чем голыми руками.',
+  bucket: 'Ведро из досок с железными обручами. Носит воду со всей реки разом и тушит пожар лучше фляги.',
+  stew: 'Миска горячей похлёбки из кухни: еда, вода и травы. Все силы сразу, и до утра голод не страшен.',
 };
-const USABLE = new Set(['apple', 'ration', 'bandage', 'flask', 'watch', 'torch', 'lantern']);
+const USABLE = new Set(['apple', 'ration', 'bandage', 'flask', 'watch', 'torch', 'lantern', 'stew', 'bucket']);
 const ITEM_ICONS = { torch: 'i-fire', lantern: 'i-fire', flask: 'i-drop', bandage: 'i-cross', map: 'i-map', note: 'i-note', watch: 'i-clock', keycard: 'i-code', scrap: 'i-code', gear: 'i-gear', herb: 'i-tree' };
 const THUMBS = {};
 

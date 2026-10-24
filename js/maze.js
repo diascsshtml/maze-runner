@@ -8,7 +8,8 @@ const MID = CELLS;                     // центральный тайл (39) �
 const MID_CELL = (CELLS - 1) / 2;
 const GLADE_LO = 13, GLADE_HI = 25;    // клетки Глэйда (включительно), 13×13
 const GLADE_T0 = GLADE_LO * 2 + 1, GLADE_T1 = GLADE_HI * 2 + 1;   // тайлы Глэйда 27..51 (87.5 м)
-const T = { WALL: 0, FLOOR: 1, GLADE: 2, GATE: 3, EXIT: 4 };
+// IVY — проход, затянутый плющом (с виду стена); MARK — основание ориентира в центре площади (не пройти)
+const T = { WALL: 0, FLOOR: 1, GLADE: 2, GATE: 3, EXIT: 4, IVY: 7, MARK: 8 };
 const DIRS = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }];
 
 // Ворота Глэйда. vertical — створки едут по вертикали (ворота в западной/восточной стене)
@@ -23,6 +24,19 @@ const GATES = [
 // Сектор 1 смотрит на север, дальше по часовой стрелке; 0 — Глэйд.
 const MAZE_R = 19.35;                  // радиус Лабиринта в клетках
 const CODE_WORDS = ['FLOAT', 'CATCH', 'BLEED', 'DEATH', 'STRETCH', 'PUSH'];
+
+// Характер секторов: у каждого свои стены и пол (walls.js), приметы и ориентир на площади (mazedecor.js).
+// loops — сколько лишних проходов: в Обвальном много обходов, в Когтистом — тупик на тупике
+const SECTOR_THEMES = [null,
+  { name: 'Плющевой', loops: 0.07, ivy: 3, landmark: 'lm_tree_giant', lm: 'Дерево-великан', text: 'Стены сплошь в плюще, под ногами трава. Плющ может прятать проход.' },
+  { name: 'Обвальный', loops: 0.15, ivy: 1, landmark: 'lm_slab', lm: 'Упавшая плита', text: 'Стены осыпаются, кругом обломки. Зато много обходных путей.' },
+  { name: 'Ржавый', loops: 0.08, ivy: 1, landmark: 'lm_mast', lm: 'Ржавая мачта', text: 'Ржавые трубы вдоль стен, решётки в полу. Над стенами видна мачта с красным огнём.' },
+  { name: 'Сырой', loops: 0.09, ivy: 1, landmark: 'lm_pool', lm: 'Затопленная площадь', text: 'Стены мокрые и тёмные, под ногами стоит вода.' },
+  { name: 'Корни', loops: 0.05, ivy: 2, landmark: 'lm_tree_dead', lm: 'Мёртвое дерево', text: 'Корни пробили стены и ползут по полу. Над стенами — голые ветви мёртвого дерева.' },
+  { name: 'Пепельный', loops: 0.06, ivy: 1, landmark: 'lm_camp', lm: 'Сгоревший лагерь', text: 'Стены в копоти, пол в пепле. Здесь когда-то ночевали бегуны.' },
+  { name: 'Меловой', loops: 0.11, ivy: 1, landmark: 'lm_column', lm: 'Сломанная колонна', text: 'Светлый камень в лишайнике, сухая пыль. Над стенами торчит сломанная колонна.' },
+  { name: 'Когтистый', loops: 0.02, ivy: 1, landmark: 'lm_gear', lm: 'Гигантская шестерня', text: 'Глубокие царапины на стенах, тупик за тупиком. Здесь гриверы чувствуют себя дома.' },
+];
 
 function rand(n) { return Math.floor(Math.random() * n); }
 function shuffle(a) {
@@ -80,7 +94,9 @@ const Maze = {
       for (let x = GLADE_T0; x <= GLADE_T1; x++) this.set(x, y, T.GLADE);
     }
     this.carve(cells);
-    this.addLoops(cells, 0.07);
+    this.addLoops(cells);
+    this.makePlazas();
+    this.makeIvy();
     for (const g of GATES) this.set(g.x, g.y, T.GATE);
 
     // Выход прячется во внешней стене круга: стена между крайней клеткой и пустотой снаружи
@@ -116,14 +132,89 @@ const Maze = {
     }
   },
 
-  // Немного лишних проходов, чтобы от гриверов можно было уйти кругом
-  addLoops(cells, chance) {
+  // Лишние проходы, чтобы от гриверов можно было уйти кругом; сколько — зависит от сектора
+  addLoops(cells) {
     const inSet = new Set(cells.map(([cx, cy]) => cy * CELLS + cx));
     for (const [cx, cy] of cells) {
+      const chance = SECTOR_THEMES[sectorOfCell(cx, cy)].loops;
       for (const d of [DIRS[1], DIRS[2]]) {
         const nx = cx + d.x, ny = cy + d.y;
         if (nx >= CELLS || ny >= CELLS || !inSet.has(ny * CELLS + nx)) continue;
         if (Math.random() < chance) this.set(cx * 2 + 1 + d.x, cy * 2 + 1 + d.y, T.FLOOR);
+      }
+    }
+  },
+
+  // Площадь 2×2 клетки: четыре внутренние стены убраны, в центре — основание ориентира
+  openPlaza(cx, cy) {
+    const x = cx * 2 + 1, y = cy * 2 + 1;
+    for (const [dx, dy] of [[1, 0], [0, 1], [2, 1], [1, 2]]) this.set(x + dx, y + dy, T.FLOOR);
+    this.set(x + 1, y + 1, T.MARK);
+  },
+  // По площади с ориентиром в каждом секторе — не у Глэйда и не у внешней стены
+  makePlazas() {
+    for (let s = 1; s <= 8; s++) {
+      const cands = [];
+      for (let cy = 0; cy < CELLS - 1; cy++) {
+        for (let cx = 0; cx < CELLS - 1; cx++) {
+          const four = [[cx, cy], [cx + 1, cy], [cx, cy + 1], [cx + 1, cy + 1]];
+          if (!four.every(([a, b]) => validCell(a, b) && sectorOfCell(a, b) === s && gladeDistance(a, b) >= 4)) continue;
+          if (Math.hypot(cx + 0.5 - MID_CELL, cy + 0.5 - MID_CELL) > MAZE_R - 2.5) continue;
+          cands.push([cx, cy]);
+        }
+      }
+      if (cands.length) this.openPlaza(...cands[rand(cands.length)]);
+    }
+  },
+  // Центры площадей — по тайлам-основаниям (так их можно восстановить и из сохранения)
+  plazas() {
+    const out = [];
+    for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) if (this.tiles[y * SIZE + x] === T.MARK) out.push({ x, y, sector: sectorOfTile(x, y) });
+    return out;
+  },
+
+  // Сколько шагов по коридорам между клетками (не дальше limit) — чтобы проход за плющом срезал длинный путь
+  cellDistance(a, b, limit) {
+    const seen = new Set([a[1] * CELLS + a[0]]);
+    let front = [a];
+    for (let step = 1; step <= limit; step++) {
+      const next = [];
+      for (const [cx, cy] of front) {
+        for (const d of DIRS) {
+          const nx = cx + d.x, ny = cy + d.y, k = ny * CELLS + nx;
+          if (seen.has(k) || !validCell(nx, ny) || this.at(cx * 2 + 1 + d.x, cy * 2 + 1 + d.y) === T.WALL) continue;
+          if (nx === b[0] && ny === b[1]) return step;
+          seen.add(k);
+          next.push([nx, ny]);
+        }
+      }
+      front = next;
+    }
+    return Infinity;
+  },
+  // Тайные проходы: стена между двумя клетками затянута плющом, и сквозь неё можно пройти
+  makeIvy(only = 0) {
+    for (let s = 1; s <= 8; s++) {
+      if (only && s !== only) continue;
+      const cands = [];
+      for (let cy = 0; cy < CELLS; cy++) {
+        for (let cx = 0; cx < CELLS; cx++) {
+          if (!validCell(cx, cy) || sectorOfCell(cx, cy) !== s || gladeDistance(cx, cy) < 2) continue;
+          for (const d of [DIRS[1], DIRS[2]]) {
+            const nx = cx + d.x, ny = cy + d.y, wx = cx * 2 + 1 + d.x, wy = cy * 2 + 1 + d.y;
+            if (!validCell(nx, ny) || sectorOfCell(nx, ny) !== s || this.at(wx, wy) !== T.WALL) continue;
+            if (DIRS.some(e => this.at(wx + e.x, wy + e.y) === T.MARK)) continue;
+            cands.push([cx, cy, nx, ny, wx, wy]);
+          }
+        }
+      }
+      shuffle(cands);
+      let made = 0;
+      for (const [cx, cy, nx, ny, wx, wy] of cands.slice(0, 40)) {
+        if (made >= SECTOR_THEMES[s].ivy) break;
+        if (this.cellDistance([cx, cy], [nx, ny], 14) <= 14) continue;
+        this.set(wx, wy, T.IVY);
+        made++;
       }
     }
   },
@@ -135,11 +226,12 @@ const Maze = {
     for (let cy = 0; cy < CELLS; cy++) {
       for (let cx = 0; cx < CELLS; cx++) if (inS(cx, cy)) cells.push([cx, cy]);
     }
-    const border = [];
+    const border = [], ivy = [];
     for (const [cx, cy] of cells) {
       for (const d of DIRS) {
         const nx = cx + d.x, ny = cy + d.y;
         if (inS(nx, ny)) {
+          if (this.at(cx * 2 + 1 + d.x, cy * 2 + 1 + d.y) === T.IVY) ivy.push([cx * 2 + 1 + d.x, cy * 2 + 1 + d.y]);
           this.set(cx * 2 + 1 + d.x, cy * 2 + 1 + d.y, T.WALL);
         } else if (validCell(nx, ny)) {
           border.push({ x: cx * 2 + 1 + d.x, y: cy * 2 + 1 + d.y });
@@ -147,7 +239,10 @@ const Maze = {
       }
     }
     this.carve(cells);
-    this.addLoops(cells, 0.07);
+    this.addLoops(cells);
+    // Площадь и проходы за плющом сдвиг не трогает
+    for (const p of this.plazas()) if (p.sector === s) this.openPlaza((p.x - 2) / 2, (p.y - 2) / 2);
+    for (const [x, y] of ivy) this.set(x, y, T.IVY);
     for (let i = 0; i < 3 && border.length; i++) {
       const b = border[rand(border.length)];
       this.set(b.x, b.y, this.at(b.x, b.y) === T.WALL ? T.FLOOR : T.WALL);

@@ -2,7 +2,7 @@
 // Запасы добывают жители, пока работают: лесорубы — дерево, огородники — еду и ткань, медаки — травы,
 // кузнец — металл из старого лома. Ночью запасы уходят: еда на всех, дрова на костёр и факелы.
 
-const RES_NAMES = { wood: 'Дерево', food: 'Еда', metal: 'Металл', cloth: 'Ткань', herbs: 'Травы' };
+const RES_NAMES = { wood: 'Дерево', food: 'Еда', metal: 'Металл', cloth: 'Ткань', herbs: 'Травы', stone: 'Камень', planks: 'Доски', water: 'Вода' };
 
 const BUILDINGS = {
   workshop: { name: 'Мастерская', house: 'forge',
@@ -43,14 +43,15 @@ const Life = {
 function resetLife() {
   for (const d of Life.decor) World.scene.remove(d);
   Object.assign(Life, {
-    res: { wood: 12, food: 18, metal: 3, cloth: 5, herbs: 4 },
+    res: { wood: 12, food: 18, metal: 3, cloth: 5, herbs: 4, stone: 0, planks: 0, water: 0 },
     lvl: { workshop: 1, kitchen: 1, storage: 1, houses: 1 },
     build: null, season: 0, alarm: 0, morale: 60, hunger: false, fire: null, gateBroken: null, decor: [], todayEvent: null,
   });
   applySeason();
 }
 
-function storageCap() { return [0, 40, 80, 140][Life.lvl.storage]; }
+// Пока картохранилища нет, запасы лежат у Ящика под брезентом — немного; кладовая добавляет треть
+function storageCap() { return Math.round([30, 40, 80, 140][Life.lvl.storage || 0] * (isBuilt('pantry') && Settle.on ? 1.33 : 1)); }
 function addRes(k, v) { Life.res[k] = Math.max(0, Math.min(storageCap(), Life.res[k] + v)); }
 function canPay(cost) { return Object.entries(cost).every(([k, v]) => (RES_NAMES[k] ? Life.res[k] >= v : countItem(k) >= v)); }
 function pay(cost) {
@@ -78,14 +79,20 @@ function updateLife(dt) {
   const S = SEASONS[Life.season];
   const k = Game.phase === 'day' ? dt * (0.7 + 0.6 * Life.morale / 100) : 0;
   for (const n of Game.npcs) {
-    if (n.injured > 0 || n.companion) continue;
-    if (n.act === 'chop') addRes('wood', 0.045 * k);
-    else if (n.act === 'hoe') { addRes('food', 0.022 * k * S.food); addRes('cloth', 0.006 * k); }
-    else if (n.act === 'hammer' && n.role === 'smith') addRes('metal', 0.008 * k);
-    else if (n.act === 'talk' && n.role.startsWith('medjack')) addRes('herbs', 0.012 * k * S.herbs);
+    if (n.injured > 0 || n.companion || n.fresh) continue;
+    const kk = k * (n.skill || 1);           // своё дело — в полтора раза быстрее
+    if (n.act === 'chop') {
+      addRes('wood', 0.045 * kk);
+      if (Settle.on && isBuilt('woodpile') && n.role === 'woodcutter') addRes('planks', 0.012 * kk);
+    } else if (n.act === 'hoe') { addRes('food', 0.022 * kk * S.food); addRes('cloth', 0.006 * kk); }
+    else if (n.act === 'hammer' && n.role === 'smith') addRes('metal', 0.008 * kk);
+    else if (n.act === 'hammer' && n.role === 'miner') addRes('stone', 0.03 * kk);
+    else if (n.act === 'pickup' && n.role === 'carrier' && n.target && n.target.unload) addRes('water', 0.07 * kk);
+    else if (n.act === 'talk' && n.role.startsWith('medjack')) addRes('herbs', 0.012 * kk * S.herbs);
     else if (n.act === 'hammer' && n.goal && n.goal.build && Life.build) Life.build.t += dt;
   }
   if (Life.build && Life.build.t >= Life.build.need) finishBuild();
+  if (Settle.on && isBuilt('rainbarrel') && Weather.cur.rain > 0.2) addRes('water', Weather.cur.rain * 0.06 * dt);
   Life.alarm = Math.max(0, Life.alarm - dt);
   updateFire(dt);
   if (Life.todayEvent && Life.todayEvent.at !== undefined && !Life.todayEvent.fired && Game.phase === 'day' &&
@@ -172,8 +179,19 @@ function refuelLantern() {
 
 /* ---------- день и ночь ---------- */
 
+// Вода: в поселении на ночь уходит по трети ведра на каждого
+function waterNeed() { return Settle.on ? Math.ceil(gladers() * 0.35) : 0; }
+
 function lifeOnNight() {
-  const food = foodNeed(), wood = woodNeed();
+  assignNightDuties();
+  const food = foodNeed(), wood = woodNeed(), water = waterNeed();
+  if (water) {
+    if (Life.res.water < water) {
+      addMorale(-5);
+      toast('Воды на ночь не хватило — все легли с пересохшим горлом. Набери воды в реке ведром или поставь бочку для дождя.', 'warn');
+    }
+    Life.res.water = Math.max(0, Life.res.water - water);
+  }
   Life.hunger = Life.res.food < food;
   Life.res.food = Math.max(0, Life.res.food - food);
   const cold = Life.res.wood < wood;
@@ -188,7 +206,11 @@ function lifeOnNight() {
     toast('Дров почти нет — костёр еле тлеет, ночью холодно.', 'warn');
   }
   Life.coldNight = cold;
-  // Ворота так и не починили — ночью через щель пролез гривер
+  // Ворота так и не починили — ночью через щель пролез гривер (если нет частокола)
+  if (Life.gateBroken && !Life.gateBroken.fixed && Settle.on && isBuilt('palisade')) {
+    toast('Ночью гривер ломился в сломанные ворота, но частокол его удержал.', 'good');
+    Life.gateBroken = null;
+  }
   if (Life.gateBroken && !Life.gateBroken.fixed) {
     const pool = Game.npcs.filter(n => !n.companion && !n.injured);
     const victim = pool[rand(pool.length)];
@@ -210,7 +232,11 @@ function lifeOnDay() {
     applySeason();
     toast(`Наступает ${SEASONS[Life.season].name.toLowerCase()}. ${seasonHint()}`, 'info');
   }
-  for (const n of Game.npcs) if (n.injured > 0) n.injured--;
+  for (const n of Game.npcs) if (n.injured > 0) n.injured -= isBuilt('medhut') && Settle.on ? 2 : 1;
+  for (const n of Game.npcs) n.injured = Math.max(0, n.injured || 0);
+  gatherOnDay();
+  settlersOnDay();
+  if (Settle.on && isBuilt('watchfires')) addMorale(2);
   if (Life.lvl.houses >= 2) addMorale(3);
   if (Life.morningAlarm) { Life.alarm = 40; Life.morningAlarm = false; }
   rollEvent();
@@ -404,9 +430,11 @@ function renderBoard(body) {
   }
   if (acts.children.length) body.append(acts);
 
-  body.append(el('h3', 'panel-sub', 'Постройки'));
+  renderSettleBoard(body);
+  body.append(el('h3', 'panel-sub', 'Улучшения построек'));
   for (const [id, b] of Object.entries(BUILDINGS)) {
     const lv = Life.lvl[id], card = el('div', 'bcard');
+    if (!lv) continue;                      // ещё не построено — сначала стройка
     const head = el('div', 'bhead');
     head.append(el('b', '', b.name), el('span', 'lvl', '●'.repeat(lv) + '○'.repeat(3 - lv)));
     card.append(head, el('p', '', b.desc[lv - 1]));

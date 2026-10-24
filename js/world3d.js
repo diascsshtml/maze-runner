@@ -109,6 +109,7 @@ function initWorld() {
   initWalls(scene, Q.density);
   makeProcModels();
   buildGlade(World.quality);
+  initLift();
   initWeather(scene);
   initFauna(scene);
   for (const [l, id] of [[World.kitchenLight, 'dining'], [World.forgeLight, 'forge']]) {
@@ -315,8 +316,8 @@ function updateTimeOfDay(dt) {
   World.handLight.intensity = light ? (0.5 + dn * 3.4) * (light > 1 ? 1.5 : flick) : 0;
   World.handLight.distance = light > 1 ? 26 : 18;
   World.fireLight.intensity = (0.6 + dn * 3.2) * flick;
-  World.kitchenLight.intensity = (0.6 + dn * 1.8) * flick;
-  World.forgeLight.intensity = (0.8 + dn * 1.6) * (0.8 + Math.sin(Game.time * 9) * 0.15);
+  World.kitchenLight.intensity = (0.6 + dn * 1.8) * flick * (isBuilt('dining') ? 1 : 0);
+  World.forgeLight.intensity = (0.8 + dn * 1.6) * (0.8 + Math.sin(Game.time * 9) * 0.15) * (isBuilt('forge') ? 1 : 0);
   for (const l of World.gateLights) l.intensity = dn * 2.2 * flick;
 
   // Карта отражений — раз в несколько секунд или при заметной смене света
@@ -372,6 +373,7 @@ function updateCamera(dt) {
     menuCamera(cam, dt);
     return;
   }
+  if (Lift.active) { liftCamera(cam); return; }
   const sh = Game.shake * 0.14, bobK = Settings.headBob ? 1 : 0;
   const bob = p.moving ? Math.sin(p.walk * S * (p.sprinting ? 1.7 : 2.1)) * (p.sprinting ? 0.075 : 0.045) * bobK : 0;
   const sway = p.moving ? Math.cos(p.walk * S * (p.sprinting ? 0.85 : 1.05)) * (p.sprinting ? 0.05 : 0.025) * bobK : 0;
@@ -454,7 +456,12 @@ function renderWorld(dt) {
   World.gust = windGust(t) * (1 - 0.35 * dn);
   WIND.uGust.value = 0.5 + World.gust * 1.2;
   updateTimeOfDay(dt);
+  if (Lift.active) {                       // в шахте темно: солнце и небо пробиваются, только когда клетка у верха
+    World.sun.intensity *= Lift.light;
+    World.hemi.intensity *= Lift.light;
+  }
   adjustPost(PostFX.params);
+  if (Lift.active) PostFX.params.exposure *= 0.4 + 0.6 * Lift.light;
   updateWalls(dt, tw(p.x), tw(p.y));
   updateGates(dt, tw(p.x), tw(p.y));
   updateGlade(dt, dn, tw(p.x), tw(p.y));

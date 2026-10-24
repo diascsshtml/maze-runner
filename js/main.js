@@ -66,9 +66,11 @@ function setupWorld(save = null) {
   });
   Game.items = Maze.placeItems();
   Game.player = makePlayer();
+  resetLife();
+  resetSettle(!save);
+  Tutorial.load();
   Game.npcs = makeNpcs();
   Sound.clearVoices();
-  resetLife();
   resetStory();
   resetSquad();
   resetWeather();
@@ -120,13 +122,17 @@ function startGame(mode = 'new') {
     Game.hints = [];
     return;
   }
-  Sound.boxArrives();
-  setTimeout(() => toast('Ты очнулся в Ящике. Ничего не помнишь. Вокруг Глэйд, за стенами Лабиринт.', 'info'), 1500);
+  Game.intro = 0;
+  startLift(() => toast('Ты очнулся в Ящике. Ничего не помнишь — только своё имя: Томас. Глэйд пуст: ты здесь первый.', 'info'));
+  if (Settings.skipIntro) skipLift();
   if (Game.ngPlus) {
     giveItem('watch');
     setTimeout(() => toast(`Новая игра+ (уровень ${Game.ngPlus}): гриверов больше, они быстрее, стены сдвигаются чаще. Прочитанные записки остались в журнале, часы — в сумке.`, 'warn'), 5200);
   }
-  Game.hints = Settings.hints ? [
+  Game.hints = Settings.hints && Settle.on ? [
+    { at: 50, text: 'Ночью уходят еда, дрова и вода. До заката запасись и разведи костёр — он строится на участке у Ящика.' },
+    { at: 95, text: 'Ворота открыты весь день. В Лабиринте лежат металлолом и 6 фрагментов кода — но вернись до заката.' },
+  ] : Settings.hints ? [
     { at: 40, text: 'Ворота открыты весь день. Найди в Лабиринте 6 фрагментов кода — и вернись до заката.' },
     { at: 70, text: 'Карта справа рисуется сама, пока ты бежишь. ' + keyLabel(Settings.keys.map) + ' — открыть её крупно.' },
   ] : [];
@@ -134,6 +140,7 @@ function startGame(mode = 'new') {
 
 function startNight() {
   if (Game.gate < 1) Sound.gateSlam();
+  runnersOnNight();
   Object.assign(Game, { phase: 'night', timeLeft: Game.nightLen, gate: 1, gateDir: 0, shifted: false, warned: false });
   Game.outsideNight = playerTile() !== T.GLADE;
   if (Game.outsideNight) {
@@ -171,7 +178,7 @@ function startDay() {
     toast(`День ${Game.day}. Ворота открываются.`, 'info');
   }
   Game.outsideNight = false;
-  if (Game.day === 2) Game.teresaT = 6;
+  if (Game.day === 2 && !Settle.on) Game.teresaT = 6;        // в поселении Тереза приходит в свою очередь на Ящике
   Story.talkedToday.clear();
   lifeOnDay();
   weatherOnDay();
@@ -312,7 +319,7 @@ function adjustPost(P) {
   P.hurt = Math.max(0, Game.hurtT) * 0.9 + (p && p.hearts === 1 && Game.state === 'play' ? 0.18 + Math.sin(Game.time * 5) * 0.08 : 0);
   if (p && p.hearts === 1) P.saturation *= 0.7;
   P.aberration = 0.012 + Math.max(0, Game.hurtT) * 0.05;
-  P.fade = Game.state === 'exit' ? 0.3 : Game.state === 'title' ? MenuCam.fade : Game.intro > 0 ? 1 - Math.min(1, (Game.intro - 0.5) / 3) : Game.sleeping ? 0.25 : 1;
+  P.fade = Game.state === 'exit' ? 0.3 : Game.state === 'title' ? MenuCam.fade : Lift.active ? Lift.fade : Game.intro > 0 ? 1 - Math.min(1, (Game.intro - 0.5) / 3) : Game.sleeping ? 0.25 : 1;
   P.exposure *= Settings.brightness;
 }
 
@@ -320,6 +327,8 @@ function adjustPost(P) {
 
 function update(dt) {
   Game.time += dt;
+  if (Lift.active) { updateLift(dt); return; }      // вступление: мир стоит, пока Ящик поднимается
+  updateBoxDoors(dt);
   const p = Game.player;
   const clockDt = Game.sleeping ? dt * 12 : dt;
   Game.timeLeft -= clockDt;
@@ -424,6 +433,11 @@ function update(dt) {
   updateLife(dt);
   updateSquad(dt);
   updateSecrets(dt);
+  updateSettle(dt);
+  updateSettlers(dt);
+  updateRunners(dt);
+  updateGather(dt);
+  updateMazeDecor(dt, p);
   updateWeather(dt);
   updateNoise(dt);
   Tutorial.update();
@@ -527,9 +541,14 @@ function updateHud() {
   let prompt = '';
   if (Game.state === 'play' && Game.intro <= 0) {
     const k = keyLabel(Settings.keys.action), lad = !p.climb && findLadder(p);
-    const npc = !p.climb && !Items.near && npcInFront(p), sp = !npc && Secrets.prompt(p);
+    const npc = !p.climb && !Items.near && npcInFront(p), sp = !npc && Secrets.prompt(p), stp = !npc && !sp && (Gather.work ? '' : Settle.prompt(p));
+    const gp = !npc && !sp && !stp && Gather.prompt(p), rp = !npc && Runners.prompt(p);
     if (Secrets.clearing) {
       prompt = Secrets.prompt(p);
+    } else if (Settle.work) {
+      prompt = stp;
+    } else if (Gather.work) {
+      prompt = Gather.prompt(p);
     } else if (p.climb) {
       prompt = `${keyLabel(Settings.keys.forward)} — вверх, ${keyLabel(Settings.keys.back)} — вниз, ${k} — отпустить лестницу`;
     } else if (Items.near) {
@@ -539,6 +558,12 @@ function updateHud() {
       prompt = `${k} — поговорить: ${npc.name}${npc.injured ? ' (ранен)' : ''}`;
     } else if (sp) {
       prompt = sp;
+    } else if (rp) {
+      prompt = rp;
+    } else if (stp) {
+      prompt = stp;
+    } else if (gp) {
+      prompt = gp;
     } else if (playerTile() === T.GLADE && depositable().length && nearHouse('storage', 6)) {
       prompt = `${k} — сдать находки на склад`;
     } else if (lad) {
@@ -620,6 +645,9 @@ function action() {
   const npc = npcInFront(p);
   if (npc) { talkTo(npc); return; }
   if (Secrets.action(p)) return;
+  if (Runners.action(p)) return;
+  if (Settle.action(p)) return;
+  if (Gather.action(p)) return;
   if (playerTile() === T.GLADE && depositable().length && nearHouse('storage', 6)) { deposit(); return; }
   const lad = findLadder(p);
   if (lad) { startClimb(p, lad); return; }
@@ -794,6 +822,10 @@ function lockPointer() {
 
 window.addEventListener('keydown', e => {
   if (!$('screen-settings').hidden) { settingsKey(e); return; }
+  if (Lift.active && Game.state === 'play') {
+    if (['Space', 'Enter', 'Escape', 'NumpadEnter'].includes(e.code)) { e.preventDefault(); skipLift(); }
+    return;
+  }
   const act = keyAction(e.code), arrow = /^Arrow/.test(e.code);
   // Экраны поверх игры: подтверждение, «Как играть», выход, меню — Esc и стрелки
   if (!$('screen-confirm').hidden) {

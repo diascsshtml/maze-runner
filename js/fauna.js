@@ -216,8 +216,9 @@ function updateFauna(dt) {
     r.rotation.y = Math.PI / 2 - u.dir;
     animalAct(r, hopping ? 'hop' : 'idle', u.flee > 0 ? 1.8 : 1.1, dt);
   }
-  // Загон: свиньи и куры бродят внутри
+  // Загон: свиньи и куры бродят внутри (если загон построен)
   const P = LAYOUT.pen;
+  if (!isBuilt('pen')) return;
   for (const m of Fauna.pen) {
     const u = m.userData;
     u.t += dt;
