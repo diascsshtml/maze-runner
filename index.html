@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Бегущий в лабиринте</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Rubik:wght@400;500;600;700&family=Tektur:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!--ICONS: значки интерфейса, рисуются одной линией в цвет текста (currentColor) -->
+<svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 20.7s-7.6-4.6-9.7-9.4C.8 7.8 2.9 4 6.6 4c2.1 0 3.6 1.2 4.4 2.6.8-1.4 2.3-2.6 4.4-2.6 3.7 0 5.8 3.8 4.3 7.3-2.1 4.8-9.7 9.4-9.7 9.4z"/></symbol>
+    <symbol id="i-run" viewBox="0 0 24 24"><circle cx="14.5" cy="4.3" r="2"/><path d="M5.5 10.6l3-2.6 4.6.3 2.4 3.6 3.4 1.1"/><path d="M13.1 8.3l-2.6 5.8 4 2.6-1.2 4.8"/><path d="M10.5 14.1l-2.4 3.4-3.6.6"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-gate" viewBox="0 0 24 24"><path d="M3.5 20.5V3.5h6.5v17M20.5 20.5V3.5H14v17"/><path d="M10 6.5l2 1.5-2 1.5M10 12.5l2 1.5-2 1.5M14 9.5L12 11l2 1.5M14 15.5L12 17l2 1.5"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5V5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.6A8.3 8.3 0 1 1 9.4 4.5a6.8 6.8 0 0 0 10.1 10.1z"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.6 8.4l-2 5.2-5.2 2 2-5.2z"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="M3 6l6-2.5 6 2.5 6-2.5v14L15 20l-6-2.5L3 20z"/><path d="M9 3.5v14M15 6v14"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 9c0-2.6 2.2-4.3 6-4.3s6 1.7 6 4.3v11a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1z"/><path d="M9.5 4.9V3.4h5v1.5M9 13.2h6v4H9z"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 11h7M9 14.5h7M9 18h4"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 3.5 2 3.5H5"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s6.5-6.2 6.5-11a6.5 6.5 0 0 0-13 0c0 4.8 6.5 11 6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l1.5-2.5h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 19.5c.6-3.3 2.8-5 5.5-5s4.9 1.7 5.5 5"/><circle cx="16.5" cy="9" r="2.4"/><path d="M15.6 14.6c2.4-.2 4.3 1.2 4.9 4.4"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8l1.6 2.3 2.7-.6.6 2.7 2.4 1.4-1 2.5 1 2.6-2.4 1.3-.6 2.7-2.7-.5L12 21.2l-1.6-2.2-2.7.5-.6-2.7-2.4-1.3 1-2.6-1-2.5 2.4-1.4.6-2.7 2.7.6z"/></symbol>
+    <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M8 5.2v13.6L18.8 12z"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 9.3h16M4 14.7h16M9.3 4v16M14.7 4v16"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M6 3.5h12v17l-6-4.3-6 4.3z"/></symbol>
+    <symbol id="i-door" viewBox="0 0 24 24"><path d="M13.5 3.5H5.5v17h8"/><path d="M10 12h10.5M17 8.5l3.5 3.5-3.5 3.5"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 11L12 4l8.5 7"/><path d="M6 9.5V20h12V9.5M10 20v-5h4v5"/></symbol>
+    <symbol id="i-hammer" viewBox="0 0 24 24"><path d="M13.5 4.5l6 6-2 2-6-6z"/><path d="M14.5 8.5L5 18a1.4 1.4 0 0 0 2 2l9.5-9.5"/></symbol>
+    <symbol id="i-fire" viewBox="0 0 24 24"><path d="M12 21c3.6 0 6-2.4 6-5.6 0-3.5-2.6-5.4-3.6-8.4-.4 2-1.4 3-2.4 3.6.2-2.6-1-5.2-3.4-7.1.2 3.2-1.6 5-2.8 6.6A6.7 6.7 0 0 0 6 15.4C6 18.6 8.4 21 12 21z"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.5L22 20H2z"/><path d="M12 10v4.5M12 17.2v.3"/></symbol>
+    <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.5s-6 6.8-6 11a6 6 0 0 0 12 0c0-4.2-6-11-6-11z"/></symbol>
+    <symbol id="i-weight" viewBox="0 0 24 24"><path d="M9 7.5a3 3 0 1 1 6 0"/><path d="M6.5 9h11l2 11h-15z"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.6v.6M12 16.8v.3"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1"/><path d="M8 10h8M8 14h5"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 3l7.5 17-7.5-4.3L4.5 20z"/></symbol>
+    <symbol id="i-keys" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.5M9.5 10h.5M13 10h.5M16.5 10h1M7 14h10"/></symbol>
+    <symbol id="i-display" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="1"/><path d="M8.5 20h7M12 16.5V20"/></symbol>
+    <symbol id="i-ui" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M8 9v11"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24"><path d="M8 12V6.5a1.5 1.5 0 0 1 3 0V11M11 10.5V5a1.5 1.5 0 0 1 3 0v5.5M14 10.5V6.5a1.5 1.5 0 0 1 3 0V14c0 4-2.5 6.5-6 6.5-2.6 0-4.3-1.4-5.4-3.5L4 13.5a1.5 1.5 0 0 1 2.6-1.4L8 14"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l2 6.5 6.5 2.5-6.5 2-2 6.5-2-6.5-6.5-2L10 9.5z"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+    <symbol id="i-tree" viewBox="0 0 24 24"><path d="M12 21v-5M12 3l6 8h-3l4 5H5l4-5H6z"/></symbol>
+    <symbol id="i-beacon" viewBox="0 0 24 24"><path d="M9 21V8l3-4.5L15 8v13M5 21h14M12 3.5V1.5"/></symbol>
+    <symbol id="i-trap" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/><path d="M4 4l16 16M20 4L4 20"/></symbol>
+    <symbol id="i-sign" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M9.5 9.5h5"/></symbol>
+    <symbol id="i-cross" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+  </defs>
+</svg>
+<!--/ICONS-->
+<canvas id="game"></canvas>
+
+<!-- HUD: силы и здоровье, компас, часы до закрытия ворот, мини-карта, предметы, подсказки -->
+<div id="hud" hidden>
+  <div class="hud-tl plate">
+    <div class="v-day"><span id="hud-day">День 1</span><span id="hud-season"></span></div>
+    <div class="v-row" title="Жизни">
+      <div id="hearts" aria-label="Жизни"><svg class="ico"><use href="#i-heart"/></svg><svg class="ico"><use href="#i-heart"/></svg><svg class="ico"><use href="#i-heart"/></svg></div>
+    </div>
+    <div class="v-row" title="Выносливость"><svg class="ico"><use href="#i-run"/></svg><div id="stamina"><div id="stamina-fill"></div></div></div>
+    <div id="bleed" class="v-alert" hidden><svg class="ico"><use href="#i-drop"/></svg>Кровотечение — нужен бинт</div>
+    <div class="v-code"><span class="v-label" id="code-label">Код Лабиринта</span><div id="code"></div></div>
+  </div>
+  <div id="compass" aria-hidden="true">
+    <div class="compass-bg"></div>
+    <div id="compass-strip"></div>
+    <div id="compass-marks"></div>
+    <div class="compass-needle"></div>
+    <span id="compass-deg"></span>
+  </div>
+  <div class="hud-tr">
+    <div id="clock" class="frame"><svg class="ico"><use id="clock-ico" href="#i-gate"/></svg><b id="hud-time">3:00</b><span id="hud-time-label">до закрытия ворот</span><div class="clock-bar"><i id="clock-fill"></i></div></div>
+    <div id="map-wrap" class="plate"><canvas id="minimap" aria-label="Карта вокруг"></canvas><span class="map-n">С</span><button id="btn-map" type="button"><kbd id="map-key">M</kbd>Карта</button></div>
+  </div>
+  <div id="crosshair"></div>
+  <div id="prompt" hidden><kbd id="prompt-key"></kbd><span id="prompt-text"></span></div>
+  <div class="hud-bottom">
+    <div id="held-info" hidden><b id="held-name"></b><span id="held-hint"></span></div>
+    <div id="hotbar" hidden></div>
+  </div>
+  <div id="keyhints"></div>
+  <div id="bubble" hidden></div>
+  <div id="tip" hidden>
+    <span id="tip-step"></span>
+    <p id="tip-text"></p>
+    <button id="tip-skip" type="button">Пропустить обучение</button>
+  </div>
+</div>
+
+<div id="photo-ui" hidden>
+  <div class="photo-frame"></div>
+  <p id="photo-help"></p>
+</div>
+
+<div id="hurt" class="fx"></div>
+<div id="pickup" class="fx"></div>
+
+<div id="toasts" aria-live="polite"></div>
+
+<!-- Окно поверх игры: карта, сумка, журнал, мастерская, совет, отряд, разговор -->
+<div id="panel" hidden>
+  <div class="win frame" role="dialog" aria-labelledby="panel-title">
+    <header class="win-head" id="panel-head">
+      <svg class="ico"><use id="panel-ico" href="#i-book"/></svg>
+      <h2 id="panel-title"></h2>
+      <span class="sub" id="panel-sub"></span>
+      <button id="panel-close" class="icon-btn" type="button" aria-label="Закрыть"><svg class="ico"><use href="#i-close"/></svg><kbd>Esc</kbd></button>
+    </header>
+    <nav class="win-tabs" id="panel-tabs"></nav>
+    <div class="win-body" id="panel-body"></div>
+    <footer class="win-foot" id="panel-foot" hidden></footer>
+  </div>
+</div>
+
+<div id="touch">
+  <div class="dpad">
+    <button type="button" data-move="up" aria-label="Вперёд">▲</button>
+    <button type="button" data-move="right" aria-label="Повернуть направо">▶</button>
+    <button type="button" data-move="down" aria-label="Назад">▼</button>
+    <button type="button" data-move="left" aria-label="Повернуть налево">◀</button>
+  </div>
+  <div class="touch-right">
+    <button type="button" id="t-pause">Пауза</button>
+    <button type="button" id="t-bag">Сумка</button>
+    <button type="button" id="t-action">Действие</button>
+    <button type="button" id="t-sprint">Рывок</button>
+  </div>
+</div>
+
+<!-- Главное меню: за ним живой Глэйд на закате -->
+<section id="screen-title" class="screen">
+  <div class="menu-veil"></div>
+  <div class="menu-col">
+    <header class="logo">
+      <p class="kicker">Фан-игра по мотивам фильма</p>
+      <h1 class="logo-title"><span>Бегущий</span><span>в лабиринте</span></h1>
+      <p class="logo-tag">Ты очнулся в Ящике и ничего не помнишь. Вокруг Глэйд, за стенами — Лабиринт. Где-то в нём есть выход.</p>
+    </header>
+    <div id="menu-load" class="menu-load">
+      <div class="load-bar"><i id="load-fill"></i></div>
+      <span id="load-text">Загрузка…</span>
+    </div>
+    <nav class="menu-list" id="menu-list" aria-label="Главное меню">
+      <button class="menu-item primary" id="btn-continue" type="button" hidden><svg class="ico"><use href="#i-play"/></svg><span class="mi-text"><b>Продолжить</b><small id="continue-info"></small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+      <button class="menu-item" id="btn-start" type="button" disabled><svg class="ico"><use href="#i-box"/></svg><span class="mi-text"><b>Новая игра</b><small>Очнуться в Ящике в новом Лабиринте</small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+      <button class="menu-item" id="btn-ngplus" type="button" hidden><svg class="ico"><use href="#i-spark"/></svg><span class="mi-text"><b>Новая игра+</b><small id="ngplus-info"></small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+      <button class="menu-item" id="btn-settings" type="button"><svg class="ico"><use href="#i-gear"/></svg><span class="mi-text"><b>Настройки</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+      <button class="menu-item danger" id="btn-exit" type="button"><svg class="ico"><use href="#i-door"/></svg><span class="mi-text"><b>Выход</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+    </nav>
+    <footer class="menu-foot">
+      <div class="row"><button class="link-btn" id="btn-help" type="button"><svg class="ico"><use href="#i-help"/></svg>Как играть</button><span id="best"></span></div>
+      <p id="asset-note" hidden>Игра открыта прямо с диска, поэтому браузер не дал загрузить настоящие текстуры и модели. Запусти её через «Запустить игру.bat».</p>
+      <p>Модели — Blender и MakeHuman (CC0), фотосканы — Poly Haven (CC0).</p>
+    </footer>
+  </div>
+  <div class="menu-corner"><button class="icon-btn" id="btn-sound" type="button" aria-label="Звук" title="Звук"><svg class="ico"><use id="sound-ico" href="#i-sound"/></svg></button></div>
+  <div class="menu-caption" id="menu-caption"><b id="caption-title">Глэйд · закат</b><span id="caption-text">Ворота скоро закроются</span></div>
+</section>
+
+<section id="screen-pause" class="screen" hidden>
+  <div class="pause-wrap">
+    <div class="pause-card frame">
+      <p class="kicker" id="pause-info"></p>
+      <h2>Пауза</h2>
+      <nav class="menu-list compact" id="pause-list" aria-label="Пауза">
+        <button class="menu-item primary" id="btn-resume" type="button"><svg class="ico"><use href="#i-play"/></svg><span class="mi-text"><b>Продолжить</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+        <button class="menu-item" id="btn-save" type="button"><svg class="ico"><use href="#i-save"/></svg><span class="mi-text"><b>Сохранить игру</b><small class="save-state" id="save-state"></small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+        <button class="menu-item" id="btn-pause-settings" type="button"><svg class="ico"><use href="#i-gear"/></svg><span class="mi-text"><b>Настройки</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+        <button class="menu-item danger" id="btn-to-menu" type="button"><svg class="ico"><use href="#i-door"/></svg><span class="mi-text"><b>Главное меню</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+      </nav>
+      <div class="actions" id="pause-quick">
+        <button class="chip" id="q-map" type="button"><svg class="ico"><use href="#i-map"/></svg>Карта</button>
+        <button class="chip" id="q-bag" type="button"><svg class="ico"><use href="#i-bag"/></svg>Сумка</button>
+        <button class="chip" id="q-journal" type="button"><svg class="ico"><use href="#i-book"/></svg>Журнал</button>
+      </div>
+    </div>
+    <aside class="pause-help frame quiet">
+      <h3>Управление</h3>
+      <dl class="keylist" id="pause-keys"></dl>
+    </aside>
+  </div>
+</section>
+
+<section id="screen-settings" class="screen" hidden>
+  <div class="win frame" role="dialog" aria-labelledby="settings-title">
+    <header class="win-head"><svg class="ico"><use href="#i-gear"/></svg><h2 id="settings-title">Настройки</h2><button class="icon-btn" id="btn-settings-close" type="button" aria-label="Закрыть"><svg class="ico"><use href="#i-close"/></svg><kbd>Esc</kbd></button></header>
+    <nav class="win-tabs" id="settings-tabs"></nav>
+    <div class="win-body" id="settings-body"></div>
+    <footer class="win-foot"><span class="grow" id="settings-note">Всё сохраняется сразу, в этом браузере.</span><button class="btn ghost small" id="btn-settings-reset" type="button">По умолчанию</button><button class="btn small" id="btn-settings-back" type="button"><svg class="ico"><use href="#i-check"/></svg>Готово</button></footer>
+  </div>
+</section>
+
+<section id="screen-help" class="screen" hidden>
+  <div class="win frame" role="dialog" aria-labelledby="help-title">
+    <header class="win-head"><svg class="ico"><use href="#i-help"/></svg><h2 id="help-title">Как играть</h2><button class="icon-btn" id="btn-help-close" type="button" aria-label="Закрыть"><svg class="ico"><use href="#i-close"/></svg><kbd>Esc</kbd></button></header>
+    <nav class="win-tabs"></nav>
+    <div class="win-body">
+      <div class="help-grid">
+        <div class="help-item"><svg class="ico"><use href="#i-sun"/></svg><b>День</b><p>Ворота открыты. Беги в Лабиринт, ищи шесть фрагментов кода, тайники и записки создателей.</p></div>
+        <div class="help-item"><svg class="ico"><use href="#i-gate"/></svg><b>Закат</b><p>Вернись, пока ворота не закрылись. Часы справа вверху показывают, сколько осталось.</p></div>
+        <div class="help-item"><svg class="ico"><use href="#i-moon"/></svg><b>Ночь</b><p>Выходят гриверы, стены сдвигаются. Спи у костра или в доме — утро придёт быстрее.</p></div>
+        <div class="help-item"><svg class="ico"><use href="#i-home"/></svg><b>Глэйд</b><p>Помогай жителям, строй и улучшай дома, мастери снаряжение. Решения меняют их доверие.</p></div>
+        <div class="help-item"><svg class="ico"><use href="#i-compass"/></svg><b>Компас и карта</b><p>Компас вверху ведёт к Глэйду и выходу. Карта открывается по мере бега.</p></div>
+        <div class="help-item"><svg class="ico"><use href="#i-code"/></svg><b>Код</b><p>Собери все шесть слов — и на краю Лабиринта откроется выход. Чем закончится побег, зависит от тебя.</p></div>
+      </div>
+      <h3>Клавиши</h3>
+      <dl class="keylist" id="help-keys"></dl>
+    </div>
+    <footer class="win-foot"><span class="grow">Клавиши меняются в настройках.</span><button class="btn small" id="btn-help-ok" type="button">Понятно</button></footer>
+  </div>
+</section>
+
+<section id="screen-confirm" class="screen" hidden>
+  <div class="card frame" role="alertdialog" aria-labelledby="confirm-title">
+    <h2 id="confirm-title"></h2>
+    <p class="lead" id="confirm-text"></p>
+    <div class="actions" id="confirm-actions"></div>
+  </div>
+</section>
+
+<section id="screen-over" class="screen" hidden>
+  <div class="card frame">
+    <p class="kicker">Ужален</p>
+    <h2>Гривер тебя достал</h2>
+    <div class="stats" id="over-stats"></div>
+    <div class="menu-list compact">
+      <button class="menu-item primary" id="btn-over-continue" type="button" hidden><svg class="ico"><use href="#i-save"/></svg><span class="mi-text"><b>Вернуться к сохранению</b><small id="over-save"></small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+      <button class="menu-item" id="btn-again" type="button"><svg class="ico"><use href="#i-box"/></svg><span class="mi-text"><b>Новая игра</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+      <button class="menu-item" id="btn-over-menu" type="button"><svg class="ico"><use href="#i-door"/></svg><span class="mi-text"><b>Главное меню</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+    </div>
+  </div>
+</section>
+
+<section id="screen-win" class="screen" hidden>
+  <div class="card frame">
+    <p class="kicker">Код принят</p>
+    <h2 id="win-title">Ты выбрался из Лабиринта</h2>
+    <p id="win-ending" class="lead"></p>
+    <div class="stats" id="win-stats"></div>
+    <div class="menu-list compact">
+      <button class="menu-item primary" id="btn-win-ngplus" type="button"><svg class="ico"><use href="#i-spark"/></svg><span class="mi-text"><b>Новая игра+</b><small id="win-ngplus-info"></small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+      <button class="menu-item" id="btn-win-again" type="button"><svg class="ico"><use href="#i-box"/></svg><span class="mi-text"><b>Новый Лабиринт</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+      <button class="menu-item" id="btn-win-menu" type="button"><svg class="ico"><use href="#i-door"/></svg><span class="mi-text"><b>Главное меню</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+    </div>
+  </div>
+</section>
+
+<section id="screen-exit" class="screen" hidden>
+  <div class="card frame">
+    <p class="kicker">Глэйд засыпает</p>
+    <h2>До встречи, бегун</h2>
+    <p class="lead" id="exit-text">Прогресс сохранён в этом браузере. Вкладку можно закрыть.</p>
+    <div class="actions"><button class="btn" id="btn-exit-back" type="button"><svg class="ico"><use href="#i-play"/></svg>Вернуться в меню</button></div>
+  </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/utils/SkeletonUtils.js"></script>
+<script src="js/maze.js"></script>
+<script src="js/terrain.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/assets.js"></script>
+<script src="js/textures.js"></script>
+<script src="js/particles.js"></script>
+<script src="js/postfx.js"></script>
+<script src="js/models.js"></script>
+<script src="js/humans.js"></script>
+<script src="js/walls.js"></script>
+<script src="js/glade.js"></script>
+<script src="js/structures.js"></script>
+<script src="js/items.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/economy.js"></script>
+<script src="js/crafting.js"></script>
+<script src="js/story.js"></script>
+<script src="js/secrets.js"></script>
+<script src="js/weather.js"></script>
+<script src="js/squad.js"></script>
+<script src="js/fauna.js"></script>
+<script src="js/journal.js"></script>
+<script src="js/save.js"></script>
+<script src="js/tutorial.js"></script>
+<script src="js/people.js"></script>
+<script src="js/world3d.js"></script>
+<script src="js/minimap.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
