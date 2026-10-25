@@ -79,6 +79,7 @@ const Sound = {
     this.world.gain.setTargetAtTime(this.level * Settings.volWorld, t, 0.1);
     this.worldDry.gain.setTargetAtTime(this.level * Settings.volWorld, t, 0.1);
     this.uiBus.gain.setTargetAtTime(Settings.volUI, t, 0.05);
+    if (this.musicBus) this.musicBus.gain.setTargetAtTime(Settings.volMusic, t, 0.1);
   },
 
   // Отклик интерфейса: тихий щелчок наведения, механический клик, шорох окна, вкладка, звон сохранения
@@ -309,21 +310,67 @@ const Sound = {
     this.tone(495, 0.9, { type: 'triangle', vol: 0.16, delay: 0.2, dest: this.master });
     this.tone(660, 1.2, { type: 'triangle', vol: 0.12, delay: 0.4, dest: this.master });
   },
-  // Ящик поднимается из шахты: скрежет, лязг цепей и сигнал прибытия
-  // Подъём Ящика: глухой гул шахты, скрежет тросов, низкий вой мотора; stopLift обрывает его при пропуске
+  // Подъём Ящика: глухой гул шахты, вой мотора лебёдки, дребезг цепи, скрип блоков; stopLift обрывает его при пропуске.
+  // Слышно и в динамиках ноутбука: кроме гула, всё лежит в полосе 300 Гц – 4 кГц
   liftRise(dur) {
     if (!this.ctx) return;
-    const g = this.ctx.createGain();
+    const ctx = this.ctx, t0 = ctx.currentTime, g = ctx.createGain();
     g.connect(this.out);
     this.liftGain = g;
-    this.noise(dur, { vol: 0.34, freq: 130, brown: true, dest: g, attack: 1.2 });
-    this.noise(dur, { vol: 0.045, freq: 1100, type: 'bandpass', q: 5, dest: g, attack: 1.5 });
+    this.noise(dur, { vol: 0.24, freq: 130, brown: true, dest: g, attack: 1.2 });
+    this.noise(dur, { vol: 0.09, freq: 1100, type: 'bandpass', q: 5, dest: g, attack: 1.5 });
     this.tone(46, dur, { type: 'sawtooth', vol: 0.05, to: 58, dest: g, attack: 2 });
+    // Мотор: обороты растут к середине подъёма и падают к остановке, гудит с лёгким биением
+    const motor = ctx.createOscillator(), wob = ctx.createOscillator(), wobG = ctx.createGain(), bp = ctx.createBiquadFilter(), mg = ctx.createGain();
+    motor.type = 'sawtooth';
+    motor.frequency.setValueAtTime(62, t0);
+    motor.frequency.linearRampToValueAtTime(112, t0 + dur * 0.5);
+    motor.frequency.linearRampToValueAtTime(70, t0 + dur);
+    wob.frequency.value = 6.5;
+    wobG.gain.value = 2.5;
+    wob.connect(wobG).connect(motor.frequency);
+    bp.type = 'bandpass';
+    bp.frequency.value = 560;
+    bp.Q.value = 1.3;
+    mg.gain.setValueAtTime(0.0001, t0);
+    mg.gain.exponentialRampToValueAtTime(0.3, t0 + 1.8);
+    mg.gain.setValueAtTime(0.3, t0 + dur - 1.2);
+    mg.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    motor.connect(bp).connect(mg).connect(g);
+    motor.start(t0); motor.stop(t0 + dur + 0.1);
+    wob.start(t0); wob.stop(t0 + dur + 0.1);
+    // Цепь: частые металлические щелчки, то гуще, то реже
+    for (let k = 0.6; k < dur - 0.4; k += 0.06 + Math.random() * 0.07) {
+      const swell = 0.45 + 0.55 * Math.sin(k * 1.3) ** 2, edge = Math.min(1, k / 2, (dur - k) / 1.5);
+      this.noise(0.025, { vol: 0.1 * swell * edge * (Math.random() < 0.12 ? 2.2 : 1), freq: 2200 + Math.random() * 2200, type: 'bandpass', q: 5, attack: 0.002, delay: k, dest: g });
+    }
+    // Блоки и тросы: редкий протяжный металлический скрип
+    for (let k = 1.5 + Math.random() * 2; k < dur - 1; k += 2.2 + Math.random() * 3) {
+      const f = 1300 + Math.random() * 900;
+      this.tone(f, 0.5 + Math.random() * 0.5, { type: 'triangle', vol: 0.06, to: f * (0.82 + Math.random() * 0.1), attack: 0.08, delay: k, dest: g });
+    }
   },
   stopLift() {
     if (!this.liftGain) return;
     this.liftGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.25);
     this.liftGain = null;
+  },
+  // Стык направляющих: клетка переваливает через него — двойной лязг
+  liftJoint() {
+    if (!this.ctx) return;
+    for (const [d, k] of [[0, 1], [0.13, 0.7]]) {
+      this.noise(0.06, { vol: 0.38 * k, freq: 1500, type: 'bandpass', q: 2.5, attack: 0.002, delay: d });
+      this.tone(300, 0.12, { type: 'square', vol: 0.08 * k, to: 150, delay: d });
+    }
+  },
+  // Остановка: визг тормоза, удар, клетка оседает на упоры
+  liftStop() {
+    if (!this.ctx) return;
+    this.noise(0.9, { vol: 0.22, freq: 2900, type: 'bandpass', q: 9, attack: 0.03 });
+    this.tone(2350, 0.8, { type: 'triangle', vol: 0.07, to: 1900, attack: 0.03 });
+    this.thud(this.out, 1, 0.55);
+    this.clank();
+    this.noise(0.15, { vol: 0.2, freq: 1800, type: 'bandpass', q: 2, attack: 0.002, delay: 0.95 });
   },
   boxArrives() {
     if (!this.ctx) return;

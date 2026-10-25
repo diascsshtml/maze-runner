@@ -903,6 +903,24 @@ body.photo-mode #hud, body.photo-mode #toasts { display: none; }
 body.lift #hud, body.lift #toasts, body.lift .tip { visibility: hidden; }
 .lift-skip { position: fixed; right: 1.4rem; bottom: 1.4rem; z-index: 60; display: none; }
 body.lift .lift-skip { display: inline-flex; }
+/* Подпись на облёте Глэйда: как в меню, но слева, плавно появляется и гаснет */
+.lift-caption {
+  position: fixed;
+  left: var(--edge);
+  bottom: var(--edge-bottom);
+  z-index: 60;
+  display: grid;
+  gap: 0.2rem;
+  color: var(--ink-2);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(0.4rem);
+  transition: opacity 0.8s var(--ease), transform 0.8s var(--ease);
+}
+.lift-caption b { font: 600 1.15rem var(--font-display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--amber); }
+.lift-caption span { font-size: 0.95rem; }
+body.lift .lift-caption.on { opacity: 1; transform: none; }
 
 /* «+2 дерево» над прицелом при добыче */
 #hud-float { position: fixed; left: 50%; top: 44%; transform: translate(-50%, 0); z-index: 40; pointer-events: none;

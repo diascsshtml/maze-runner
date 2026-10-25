@@ -22,7 +22,7 @@ const KEY_ACTIONS = [
 ];
 
 const SETTING_DEFAULTS = {
-  sens: 1, invertY: false, fov: 72, volMaster: 0.8, volWorld: 1, volUI: 0.7, hints: true, skipIntro: false,
+  sens: 1, invertY: false, fov: 72, volMaster: 0.8, volWorld: 1, volUI: 0.7, volMusic: 0.8, hints: true, skipIntro: false,
   brightness: 1, headBob: true, uiScale: 1, keyHints: true, muted: false,
 };
 const Settings = { ...SETTING_DEFAULTS, keys: Object.fromEntries(KEY_ACTIONS.map(a => [a.id, a.key])) };
@@ -172,6 +172,7 @@ function renderSettings() {
   if (settingsTab === 'sound') {
     row('Общая громкость', 'Всё сразу', slider('volMaster', 0, 1, 0.05, pct));
     row('Мир', 'Ветер, костёр, река, птицы, гриверы', slider('volWorld', 0, 1.5, 0.05, pct));
+    row('Музыка', 'Тема вступления', slider('volMusic', 0, 1, 0.05, pct));
     row('Интерфейс', 'Щелчки кнопок и окон', slider('volUI', 0, 1, 0.05, pct));
     row('Звук включён', '', toggle('muted', true));
   } else if (settingsTab === 'graphics') {

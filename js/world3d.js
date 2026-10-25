@@ -284,7 +284,7 @@ function updateTimeOfDay(dt) {
   World.hemi.intensity = 0.42 * (1 - dn) + 0.06 + Weather.flash * 1.6;     // молния освещает всё на миг
 
   // Утро: первые полминуты дня и последние секунды ночи — над травой стелется молочная дымка
-  const since = Game.dayLen - Game.timeLeft;
+  const since = Game.dayLen - Game.timeLeft + (Game.day === 1 ? World.mistLead || 0 : 0);   // mistLead — облёт после Ящика
   const morning = menu ? 0 : Game.phase === 'day' ? Math.max(0, 1 - since / 30) : Math.max(0, (8 - Game.timeLeft) / 8);
   const inMaze = Game.state === 'play' && Maze.at(Math.round(p.x), Math.round(p.y)) !== T.GLADE ? 1 : 0;
   World.mazeK += (inMaze - World.mazeK) * Math.min(1, dt * 0.7);
