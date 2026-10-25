@@ -200,7 +200,7 @@ function applyStructs() {
 /* ---------- стройка ---------- */
 
 function siteNeedText(id) {
-  const d = SETTLE_DEFS[id], miss = (d.need || []).filter(n => !isBuilt(n));
+  const d = SETTLE_DEFS[id], miss = Admin.creative ? [] : (d.need || []).filter(n => !isBuilt(n));
   return miss.length ? 'сначала: ' + miss.map(n => SETTLE_DEFS[n].name.toLowerCase()).join(', ') : '';
 }
 
@@ -209,6 +209,7 @@ function startSite(id) {
   if (isBuilt(id) || Settle.sites[id] || siteNeedText(id) || !canPay(d.cost)) return;
   pay(d.cost);
   Settle.sites[id] = { t: 0 };
+  if (Admin.creative) { finishSite(id); return; }   // креатив: строится сразу
   applyStructs();
   toast(`Заложена стройка: ${d.name}. Подойди к участку и работай (${keyLabel(Settings.keys.action)}), молоток ускоряет дело.`, 'info');
   Sound.work('hammer', (plotRect(id).x0 + plotRect(id).x1) / 2, 0, (plotRect(id).z0 + plotRect(id).z1) / 2);

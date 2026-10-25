@@ -53,8 +53,9 @@ function resetLife() {
 // Пока картохранилища нет, запасы лежат у Ящика под брезентом — немного; кладовая добавляет треть
 function storageCap() { return Math.round([30, 40, 80, 140][Life.lvl.storage || 0] * (isBuilt('pantry') && Settle.on ? 1.33 : 1)); }
 function addRes(k, v) { Life.res[k] = Math.max(0, Math.min(storageCap(), Life.res[k] + v)); }
-function canPay(cost) { return Object.entries(cost).every(([k, v]) => (RES_NAMES[k] ? Life.res[k] >= v : countItem(k) >= v)); }
+function canPay(cost) { return Admin.creative || Object.entries(cost).every(([k, v]) => (RES_NAMES[k] ? Life.res[k] >= v : countItem(k) >= v)); }
 function pay(cost) {
+  if (Admin.creative) return;                       // креатив: всё бесплатно
   for (const [k, v] of Object.entries(cost)) {
     if (RES_NAMES[k]) Life.res[k] -= v;
     else takeItem(k, v);
@@ -107,6 +108,7 @@ function startBuild(id) {
   if (Life.build || next > 3 || !canPay(b.cost[next - 1])) return;
   pay(b.cost[next - 1]);
   Life.build = { id, t: 0, need: b.time[next - 1] };
+  if (Admin.creative) { finishBuild(); return; }
   toast(`Галли взялся за работу: ${b.name}, уровень ${next}. Пока он строит, запасы не тратятся зря.`, 'info');
   Story.addTrust('Галли', 2, true);
 }

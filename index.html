@@ -6,7 +6,7 @@
 <title>Бегущий в лабиринте</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Oswald:wght@400;500;600;700&family=Rubik:wght@400;500;600;700&family=Rubik+Dirt&family=Tektur:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Oswald:wght@400;500;600;700&family=Rubik:wght@400;500;600;700&family=Rubik+Dirt&family=Tektur:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -98,6 +98,8 @@
     <p id="tip-text"></p>
     <button id="tip-skip" type="button">Пропустить обучение</button>
   </div>
+  <div id="admin-tags" aria-hidden="true"></div>
+  <div id="admin-info" hidden><p id="admin-modes"></p><dl id="admin-rows" hidden></dl></div>
 </div>
 
 <div id="photo-ui" hidden>
@@ -180,6 +182,7 @@
         <button class="menu-item primary" id="btn-resume" type="button"><svg class="ico"><use href="#i-play"/></svg><span class="mi-text"><b>Продолжить</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
         <button class="menu-item" id="btn-save" type="button"><svg class="ico"><use href="#i-save"/></svg><span class="mi-text"><b>Сохранить игру</b><small class="save-state" id="save-state"></small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
         <button class="menu-item" id="btn-pause-settings" type="button"><svg class="ico"><use href="#i-gear"/></svg><span class="mi-text"><b>Настройки</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+        <button class="menu-item" id="btn-admin" type="button"><svg class="ico"><use href="#i-code"/></svg><span class="mi-text"><b>Терминал ПОРОКа</b><small>команды администратора · клавиша Ё</small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
         <button class="menu-item danger" id="btn-to-menu" type="button"><svg class="ico"><use href="#i-door"/></svg><span class="mi-text"><b>Главное меню</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
       </nav>
       <div class="actions" id="pause-quick">
@@ -272,6 +275,16 @@
   </div>
 </section>
 
+<section id="admin" hidden aria-label="Терминал ПОРОКа">
+  <header class="adm-head">
+    <i class="adm-rec" aria-hidden="true"></i><b>ПОРОК</b><span>терминал наблюдения · Глэйд, группа A · субъект A2</span>
+    <button id="adm-close" class="adm-x" type="button" aria-label="Закрыть терминал">Esc</button>
+  </header>
+  <div id="adm-log" class="adm-log" role="log" aria-live="polite"></div>
+  <label class="adm-line"><span>ПОРОК&gt;</span><input id="adm-in" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Команда"></label>
+  <p id="adm-hint" class="adm-hint"></p>
+</section>
+
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/utils/SkeletonUtils.js"></script>
@@ -313,6 +326,7 @@
 <script src="js/batch.js"></script>
 <script src="js/world3d.js"></script>
 <script src="js/minimap.js"></script>
+<script src="js/admin.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

@@ -455,7 +455,7 @@ function updateSecrets(dt) {
       if (d > 2.5) toast(scout ? 'Разведчик: «Стой! Впереди плита-ловушка».' : 'На полу впереди — странная плита. Похоже на ловушку.', 'warn');
     }
     if (t.glow) t.glow.emissiveIntensity = t.seen ? 0.35 + Math.sin(Game.time * 4) * 0.15 : 0;
-    if (d < S * 0.42 && Math.abs(p.h) < 0.5) triggerTrap(t, p);
+    if (d < S * 0.42 && Math.abs(p.h) < 0.5 && !Admin.fly) triggerTrap(t, p);
   }
   for (const r of Secrets.rooms) {
     if (r.decal && !r.open) r.decal.material.emissiveIntensity = Math.max(0.12, (light ? 0.9 : 0.25) - Math.hypot(tw(r.door.x) - px, tw(r.door.y) - pz) * 0.03);

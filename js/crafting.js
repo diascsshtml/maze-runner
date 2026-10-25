@@ -43,9 +43,10 @@ function placeBlocker(r) {
 
 function craftBlocker(r) {
   const def = ITEM_DEFS[r.id];
-  if (r.lvl && Life.lvl.workshop < r.lvl) return `нужна мастерская ${r.lvl}-го уровня`;
-  if (r.kitchen && Life.lvl.kitchen < r.kitchen) return `нужна кухня ${r.kitchen}-го уровня`;
-  const where = placeBlocker(r);
+  const free = Admin.creative;                      // креатив: без мастерской, кухни и места
+  if (!free && r.lvl && Life.lvl.workshop < r.lvl) return `нужна мастерская ${r.lvl}-го уровня`;
+  if (!free && r.kitchen && Life.lvl.kitchen < r.kitchen) return `нужна кухня ${r.kitchen}-го уровня`;
+  const where = !free && placeBlocker(r);
   if (where) return where;
   if (def && def.bag && def.bag <= Items.bag) return 'у тебя сумка не хуже';
   if (!canPay(r.cost)) return 'не хватает запасов';

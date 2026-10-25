@@ -244,6 +244,7 @@ function updatePlayer(p, dt) {
   Input.lookX = Input.lookY = 0;
   p.bleed = Math.max(0, p.bleed - dt);
   p.boost = Math.max(0, p.boost - dt);
+  if (Admin.fly) { adminFly(p, dt); return; }
   if (p.climb) {
     climbUpdate(p, dt);
     p.stamina = Math.min(100, p.stamina + 8 * dt);
@@ -274,7 +275,7 @@ function updatePlayer(p, dt) {
   const wade = p.wet ? (wl - p.h > 0.32 ? 0.5 : 0.72) : 1;
   const mud = !p.wet && groundMask('mud', p.x * S, p.y * S) > 0.55 && p.h - groundH(p.x * S, p.y * S) < 0.1 ? 0.86 : 1;
   const speed = (p.sprinting ? 2.75 : 1.75) * (f < 0 ? 0.7 : 1) * wade * mud * loadFactor() *
-    (p.bleed > 0 ? 0.85 : 1) * (p.boost > 0 ? 1.15 : 1) * (Squad.escorting ? 0.6 : 1);
+    (p.bleed > 0 ? 0.85 : 1) * (p.boost > 0 ? 1.15 : 1) * (Squad.escorting ? 0.6 : 1) * Math.min(3, Admin.speed);
   const bx = p.x, by = p.y;
   p.x += mx * speed * dt;
   collidePlayer(p);

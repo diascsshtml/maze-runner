@@ -352,6 +352,8 @@ function updateTimeOfDay(dt) {
   World.scene.fog.color.setRGB(_a.x, _a.y, _a.z);
   // Погода: в туман и дождь видно хуже
   World.scene.fog.density = (0.0032 + mz * 0.0016 + dusk * 0.0015 + mist * 0.0035 + dn * (0.016 + mz * 0.004)) * Weather.cur.fog;
+  // Полёт ПОРОКа: чем выше, тем прозрачнее воздух — сверху виден весь Лабиринт
+  if (Admin.fly && !menu) World.scene.fog.density *= 1 - Math.min(0.7, Math.max(0, (p.h - 12) / 50));
   HEIGHT_FOG.x = Math.min(0.95, (0.16 + mist * 0.55 + dusk * 0.12 + dn * (0.3 + mz * 0.2)) * (0.75 + 0.25 * Weather.cur.fog));
   HEIGHT_FOG.z = 0.22 + mist * 0.06;
   HEIGHT_FOG.w = 0.008 + mist * 0.03 + dn * 0.02 + mz * 0.008;

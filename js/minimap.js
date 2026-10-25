@@ -22,9 +22,9 @@ function initMinimap() {
 function tileColor(x, y) {
   const t = Maze.at(x, y);
   if (t === T.WALL) return MAPC.wall;
-  if (t === T.SECRET) return Secrets.hintRoom && Secrets.hintRoom.door.x === x && Secrets.hintRoom.door.y === y ? MAPC.secret : MAPC.wall;
+  if (t === T.SECRET) return Admin.xray || Secrets.hintRoom && Secrets.hintRoom.door.x === x && Secrets.hintRoom.door.y === y ? MAPC.secret : MAPC.wall;
   if (t === T.RUBBLE) return MAPC.rubble;
-  if (t === T.IVY) return MazeDecor.ivyFound.has(y * SIZE + x) ? MAPC.ivy : MAPC.wall;    // проход за плющом — только найденный
+  if (t === T.IVY) return Admin.xray || MazeDecor.ivyFound.has(y * SIZE + x) ? MAPC.ivy : MAPC.wall;    // проход за плющом — только найденный
   if (t === T.MARK) return MAPC.mark;
   if (t === T.GLADE) return decoBlocked(x, y) ? MAPC.house : MAPC.glade;
   if (t === T.GATE) return Game.gate > 0.5 ? MAPC.gateShut : MAPC.gateOpen;
@@ -40,7 +40,7 @@ function drawMapView(g, x0, y0, n, k, big = false) {
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
       const tx = x0 + x, ty = y0 + y;
-      if (tx < 0 || ty < 0 || tx >= SIZE || ty >= SIZE || !Maze.isExplored(tx, ty)) continue;
+      if (tx < 0 || ty < 0 || tx >= SIZE || ty >= SIZE || !(Admin.xray || Maze.isExplored(tx, ty))) continue;
       g.fillStyle = tileColor(tx, ty);
       g.fillRect(x * k, y * k, k, k);
     }
@@ -60,13 +60,13 @@ function drawMapView(g, x0, y0, n, k, big = false) {
       for (let x = Math.max(0, x0); x < Math.min(SIZE, x0 + n); x++) if (Game.shiftPlan.includes(sectorOfTile(x, y)) && Maze.isExplored(x, y)) g.fillRect((x - x0) * k, (y - y0) * k, k, k);
     }
   }
-  for (const it of Game.items) if (!it.taken && Maze.isExplored(it.x, it.y)) dot(it.x, it.y, k * 0.6, MAPC.code);
+  for (const it of Game.items) if (!it.taken && (Admin.xray || Maze.isExplored(it.x, it.y))) dot(it.x, it.y, k * 0.6, MAPC.code);
   if (Game.exitOpen) dot(Maze.exit.x, Maze.exit.y, k * (0.8 + Math.sin(Game.time * 6) * 0.25), MAPC.exit);
   // Замеченные ловушки, найденные знаки, отряд и раненый, которого надо спасти
   g.strokeStyle = MAPC.trap;
   g.lineWidth = 1.5;
   for (const t of Secrets.traps) {
-    if (!t.armed || !t.seen || !inView(t.x, t.y)) continue;
+    if (!t.armed || !(t.seen || Admin.xray) || !inView(t.x, t.y)) continue;
     const ax = (t.x - x0) * k, ay = (t.y - y0) * k;
     g.beginPath();
     g.moveTo(ax + 1, ay + 1); g.lineTo(ax + k - 1, ay + k - 1);
@@ -80,6 +80,7 @@ function drawMapView(g, x0, y0, n, k, big = false) {
   if (rq) dot(rq.x, rq.y, k * (0.75 + Math.sin(Game.time * 4) * 0.2), MAPC.quest);
   for (const n2 of Squad.members) dot(n2.x, n2.y, k * 0.5, MAPC.squad);
   if (Squad.stranded) dot(Squad.stranded.x, Squad.stranded.y, k * (0.7 + Math.sin(Game.time * 5) * 0.25), MAPC.stranded);
+  if (Admin.xray) adminMapLayer(dot, k);           // рентген ПОРОКа: гриверы, жители, тайники
   // Номера секторов на большой карте — те же, что на табличках в Лабиринте
   if (big) {
     g.font = `600 ${k * 2.4}px Oswald, sans-serif`;
@@ -158,6 +159,7 @@ function renderMap(body) {
   fact('Знаки секторов', `${Secrets.symbolsFound()} из ${Secrets.symbols.length}`);
   fact('Тайные комнаты', `${Secrets.rooms.filter(r => r.open).length} из ${Secrets.rooms.length}`);
   fact('Курс', `${compassWord(headingDeg(p.yaw))} · ${Math.round(headingDeg(p.yaw))}°`);
+  adminMapHook(canvas, facts);                    // ПОРОК: клик по карте — телепорт
   const legend = el('ul', 'legend'), item = (sw, text) => { const li = el('li'); li.append(sw, text); legend.append(li); };
   const swatch = (color, round) => { const s = el('span', 'sw' + (round ? ' round' : '')); s.style.background = color; return s; };
   const arrow = svgIcon('i-arrow');

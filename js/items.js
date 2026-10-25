@@ -49,6 +49,7 @@ function countItem(type) { return Items.inv.filter(it => it.type === type).lengt
 
 // Скорость при грузе: до 80% — как налегке, до 100% — чуть медленнее, сверх — тяжело
 function loadFactor() {
+  if (Admin.creative) return 1;
   const r = carryWeight() / carryCap();
   return r <= 0.8 ? 1 : r <= 1 ? 0.92 : 0.75;
 }

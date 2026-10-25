@@ -227,6 +227,7 @@ function openExit() {
 function hurt(g) {
   const p = Game.player;
   g.strikeT = 1.1;                         // гривер бьёт жалом (анимация удара)
+  if (adminSafe()) { g.stun = 2; p.invuln = 1; return; }
   if (spearBlocks()) {
     g.stun = 2.5;
     p.invuln = 1.5;
@@ -251,7 +252,7 @@ function hurt(g) {
 // Урон не от гривера: камни, ловушки
 function hurtPlayer(text) {
   const p = Game.player;
-  if (p.invuln > 0 || Game.state !== 'play') return;
+  if (p.invuln > 0 || Game.state !== 'play' || adminSafe()) return;
   p.hearts--;
   p.invuln = 1.5;
   Game.shake = 1;
@@ -331,7 +332,7 @@ function update(dt) {
   updateBoxDoors(dt);
   const p = Game.player;
   const clockDt = Game.sleeping ? dt * 12 : dt;
-  Game.timeLeft -= clockDt;
+  if (!Admin.timeStop) Game.timeLeft -= clockDt;
   Game.intro = Math.max(0, Game.intro - dt);
   Game.hurtT = Math.max(0, Game.hurtT - dt * 1.2);
 
@@ -376,10 +377,13 @@ function update(dt) {
   }
 
   if (!Game.sleeping && Game.intro <= 0.6) updatePlayer(p, dt);
-  unstickPlayer(p);
-  collidePlayer(p);
+  adminUpdate();
+  if (!Admin.fly) {                                 // в полёте — сквозь стены
+    unstickPlayer(p);
+    collidePlayer(p);
+  }
   const tile = playerTile();
-  if (tile === T.EXIT) { win(); return; }
+  if (tile === T.EXIT && !Admin.fly) { win(); return; }
   // Карта открывается вокруг: ночью и в туман — хуже, с разведчиком — шире
   Maze.reveal(p.x, p.y, (Game.phase === 'night' || Weather.kind === 'fog' ? 1 : 2) + (Squad.hasRole('scout') ? 1 : 0));
 
@@ -825,6 +829,7 @@ function lockPointer() {
 
 window.addEventListener('keydown', e => {
   if (!$('screen-settings').hidden) { settingsKey(e); return; }
+  if (adminKey(e)) return;                         // терминал ПОРОКа (admin.js)
   if (Lift.active && Game.state === 'play') {
     if (['Space', 'Enter', 'Escape', 'NumpadEnter'].includes(e.code)) { e.preventDefault(); skipLift(); }
     return;
@@ -1019,6 +1024,7 @@ function frame(now) {
     renderWorld(Game.state === 'play' || menu ? dt : 0);
     if (Game.state === 'exit') Game.exitShown = true;
   }
+  adminFrame();
   if (Photo.shoot) capturePhoto();
   if (!$('hud').hidden) {
     drawMinimap(dt);
@@ -1108,6 +1114,7 @@ async function boot() {
   $('q-journal').addEventListener('click', () => openJournal());
   $('tip-skip').addEventListener('click', () => Tutorial.skip());
   $('btn-resume').addEventListener('click', togglePause);
+  initAdmin();
   $('btn-sound').addEventListener('click', () => {
     Sound.init();
     Settings.muted = !Settings.muted;
