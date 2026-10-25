@@ -649,6 +649,7 @@ function buildBox() {
   GLADE3D.boxHole = mesh(new THREE.PlaneGeometry(3, 3), GM.hole, x, 0.035, z, null, false);
   GLADE3D.boxHole.rotation.x = -Math.PI / 2;
   GLADE3D.box = put('box_lift', x, 0, z);
+  if (GLADE3D.box) hingeBoxDoors(GLADE3D.box, x, z);
   if (!GLADE3D.box) {
     const cv = makeCanvas(256, 256), g = cv.getContext('2d');
     g.strokeStyle = '#fff';
@@ -661,7 +662,8 @@ function buildBox() {
     for (const sd of [-1, 1]) mesh(new THREE.PlaneGeometry(1.45, 2.9), grate, x + sd * 0.74, 0.08, z).rotation.x = -Math.PI / 2;
     for (const [dx, dz, ww, dd] of [[0, -1.55, 3.3, 0.22], [0, 1.55, 3.3, 0.22], [-1.55, 0, 0.22, 3.3], [1.55, 0, 0.22, 3.3]]) mesh(new THREE.BoxGeometry(ww, 0.22, dd), MAT.steel, x + dx, 0.1, z + dz);
   }
-  ITEM_SPAWNS.push({ type: 'bag', x: x + 0.7, y: 0.12, z: z + 0.5 });
+  // Сумка — у края Ящика, где выбирается Томас (не на створках: открытые, они уходят из-под неё)
+  ITEM_SPAWNS.push({ type: 'bag', x: x + 1.2, y: groundH(x + 1.2, z + 2.3) + 0.12, z: z + 2.3 });
 }
 
 function buildTorches() {

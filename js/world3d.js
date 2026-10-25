@@ -374,16 +374,16 @@ function updateCamera(dt) {
     return;
   }
   if (Lift.active) { liftCamera(cam); return; }
-  const sh = Game.shake * 0.14, bobK = Settings.headBob ? 1 : 0;
+  const sh = Game.shake * 0.07, st = Game.time, bobK = Settings.headBob ? 1 : 0;
   const bob = p.moving ? Math.sin(p.walk * S * (p.sprinting ? 1.7 : 2.1)) * (p.sprinting ? 0.075 : 0.045) * bobK : 0;
   const sway = p.moving ? Math.cos(p.walk * S * (p.sprinting ? 0.85 : 1.05)) * (p.sprinting ? 0.05 : 0.025) * bobK : 0;
   // Пробуждение в Ящике: лежит, потом встаёт
   const wake = Game.intro > 0 ? Math.min(1, Game.intro / 3) : 0;
   const h = p.h + (Game.sleeping ? 0.6 : 1.68) - wake * 1.35 - (p.wet ? 0.1 : 0);
   cam.position.set(
-    tw(p.x) + Math.sin(p.yaw) * sway + (Math.random() - 0.5) * sh,
-    h + (p.climb ? 0 : bob) + (Math.random() - 0.5) * sh,
-    tw(p.y) - Math.cos(p.yaw) * sway + (Math.random() - 0.5) * sh,
+    tw(p.x) + Math.sin(p.yaw) * sway + shakeWave(st, 0) * sh,
+    h + (p.climb ? 0 : bob) + shakeWave(st, 1) * sh,
+    tw(p.y) - Math.cos(p.yaw) * sway + shakeWave(st, 2) * sh,
   );
   cam.rotation.set(p.pitch + wake * 1.25, -p.yaw - Math.PI / 2, sway * 0.4 + wake * 0.5);
   const fov = Settings.fov + (p.sprinting ? 10 : 0);

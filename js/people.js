@@ -158,7 +158,8 @@ function npcSpot(n) {
 }
 
 function npcY(n) {
-  const x = tw(n.x), z = tw(n.y);
+  const x = tw(n.x), z = tw(n.y), box = boxFloorAt(x, z);
+  if (box !== null) return box;            // новичок стоит в открытом Ящике
   return supportH(x, z, groundH(x, z) + 1.5);
 }
 
@@ -284,7 +285,7 @@ function initPlayerBody() {
 function updatePlayerBody(dt) {
   const m = PEOPLE.body, p = Game.player;
   if (!m) return;
-  m.holder.visible = Game.state !== 'title';
+  m.holder.visible = Game.state !== 'title' && !Lift.active;   // в Ящике камера своя — тело стояло бы над проёмом
   const back = 0.18;
   m.holder.position.set(tw(p.x) - Math.cos(p.yaw) * back, p.h, tw(p.y) - Math.sin(p.yaw) * back);
   m.holder.rotation.y = Math.PI / 2 - p.yaw;

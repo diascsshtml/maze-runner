@@ -14,17 +14,19 @@ function initLift() {
   const x = tw(MID), z = tw(MID), W = 3.2;
   const shaft = new THREE.Group(), conc = GM.concrete.clone(), steel = MAT.steel || GM.metal;
   conc.color = srgb('#6e6a63');
+  // Стены шахты доходят до самой земли: сверху в открытый проём не видно пустоты под Глэйдом
+  const H = LIFT_DEPTH + 5.4, top = -0.02;
   for (const [dx, dz, w, d] of [[0, -W / 2 - 0.1, W + 0.4, 0.2], [0, W / 2 + 0.1, W + 0.4, 0.2], [-W / 2 - 0.1, 0, 0.2, W], [W / 2 + 0.1, 0, 0.2, W]]) {
-    const wall = new THREE.Mesh(boxGeo(w, LIFT_DEPTH + 4, d, 3), conc);
-    wall.position.set(x + dx, -1.4 - (LIFT_DEPTH + 4) / 2, z + dz);
+    const wall = new THREE.Mesh(boxGeo(w, H, d, 3), conc);
+    wall.position.set(x + dx, top - H / 2, z + dz);
     wall.receiveShadow = true;
     shaft.add(wall);
   }
   // Направляющие и балки шахты, аварийные лампы через каждые 4 м
-  const rail = new THREE.BoxGeometry(0.12, LIFT_DEPTH + 4, 0.12);
+  const rail = new THREE.BoxGeometry(0.12, H, 0.12);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     const r = new THREE.Mesh(rail, steel);
-    r.position.set(x + sx * (W / 2 - 0.1), -1.4 - (LIFT_DEPTH + 4) / 2, z + sz * (W / 2 - 0.1));
+    r.position.set(x + sx * (W / 2 - 0.1), top - H / 2, z + sz * (W / 2 - 0.1));
     shaft.add(r);
   }
   const lampMat = new THREE.MeshStandardMaterial({ color: 0x220a04, emissive: 0xff5a1e, emissiveIntensity: 2.2 });
@@ -87,15 +89,60 @@ function initLift() {
   const box = GLADE3D.box;
   Lift.doorL = box && box.getObjectByName('door_l');
   Lift.doorR = box && box.getObjectByName('door_r');
+  // Пока створки открыты, в шахту не шагнуть: невидимая стенка по краю проёма
+  Lift.block = { round: false, x0: x - W / 2, z0: z - W / 2, x1: x + W / 2, z1: z + W / 2, y0: -50, y1: 100, off: true };
+  COLLIDERS.push(Lift.block);
   setBoxDoors(0);
+}
+
+// В модели начало координат створок не на петлях: закрытые, они ложились друг на друга со сдвигом на север.
+// Переносим геометрию так, чтобы петля шла по внешнему краю проёма, а закрытые створки закрывали каждая свою половину.
+// Зовётся из buildBox — ещё до меню
+function hingeBoxDoors(box, x, z) {
+  const v = new THREE.Vector3();
+  for (const [door, side] of [[box.getObjectByName('door_l'), -1], [box.getObjectByName('door_r'), 1]]) {
+    if (!door || !door.geometry) continue;
+    door.rotation.z = 0;
+    const g = door.geometry.clone();
+    g.computeBoundingBox();
+    const bb = g.boundingBox;
+    g.translate(-(side < 0 ? bb.min.x : bb.max.x), -bb.min.y, -(bb.min.z + bb.max.z) / 2);
+    g.computeBoundingSphere();
+    door.geometry = g;
+    door.parent.updateMatrixWorld(true);
+    door.position.copy(door.parent.worldToLocal(v.set(x + side * BOX_HALF, side < 0 ? 0.045 : 0.05, z)));
+  }
+}
+
+// Сколько метров от точки до края Ящика (0 — внутри проёма)
+function boxGap(x, z) {
+  const dx = Math.max(0, Math.abs(x - tw(MID)) - 1.6), dz = Math.max(0, Math.abs(z - tw(MID)) - 1.6);
+  return Math.hypot(dx, dz);
+}
+
+// Высота пола под человеком в открытом Ящике: в клетке — её пол, у края проёма выбирается наверх; null — Ящик ни при чём
+function boxFloorAt(x, z) {
+  if (!Lift.cage || !Lift.cage.visible || Lift.doors <= 0.02) return null;
+  const e = Math.max(Math.abs(x - tw(MID)), Math.abs(z - tw(MID)));
+  if (e >= 1.6) return null;
+  const floor = Lift.cage.position.y;
+  return floor + (groundH(x, z) - floor) * liftEase((e - 1.0) / 0.6);
+}
+
+// Плавная тряска: сумма синусов вместо случайного рывка каждый кадр (axis — свой набор частот на ось)
+function shakeWave(t, axis) {
+  const a = axis * 1.7;
+  return Math.sin(t * 31 + a) * 0.5 + Math.sin(t * 19.3 + a * 2.1) * 0.32 + Math.sin(t * 7.1 + a * 3.3) * 0.18;
 }
 
 // 0 — закрыты, 1 — откинуты вверх-наружу
 function setBoxDoors(k) {
   Lift.doors = k;
   // Пока клетка наверху и створки открыты, видно её саму с припасами, а не тёмную шахту
-  const up = Lift.cage && Lift.cage.visible && k > 0.02;
+  const up = !!(Lift.cage && Lift.cage.visible && k > 0.02);
   if (GLADE3D.boxHole) GLADE3D.boxHole.visible = !up;
+  GROUND_LIFE.hole.value = up || Lift.active ? 1 : 0;      // из шахты сквозь закрытые створки видно небо
+  if (Lift.block) Lift.block.off = !up;
   if (Lift.shaft && !Lift.active) Lift.shaft.visible = up;
   const a = liftEase(k) * 1.75;
   if (Lift.doorL) Lift.doorL.rotation.z = a;
@@ -164,9 +211,10 @@ function liftCamera(cam) {
   const pitch = t < 8 ? 1.25 - Math.max(0, Math.sin(t * 0.8)) * 0.35 : t < 14 ? 0.15 + (t - 8) * 0.03 : 0.95 - liftEase((t - 17.5) / 1.5) * 0.85;
   _lp.set(x + (1 - sit) * 0.35, y + eye, z + (1 - sit) * 0.2 + climb * 2.1);
   _lp.y += climb * (-LIFT_FLOOR + 0.05);
-  const sh = Game.shake * 0.12;
-  _lp.x += (Math.random() - 0.5) * sh;
-  _lp.y += (Math.random() - 0.5) * sh;
+  const sh = Game.shake * 0.06;
+  _lp.x += shakeWave(t, 0) * sh;
+  _lp.y += shakeWave(t, 1) * sh;
+  _lp.z += shakeWave(t, 2) * sh * 0.6;
   cam.position.copy(_lp);
   cam.rotation.set(pitch * (1 - climb) + climb * -0.05, -Math.PI / 2 - (-Math.PI / 2 + look * (1 - climb)), (1 - sit) * 0.35);
 }
@@ -175,9 +223,8 @@ function finishLift() {
   const L = Lift;
   if (!L.active) return;
   L.active = false;
-  setBoxDoors(1);
   L.cage.position.y = LIFT_FLOOR;
-  L.shaft.visible = false;
+  setBoxDoors(1);                          // клетка наверху, створки открыты — шахта и клетка видны сквозь проём
   L.lightSrc.intensity = 0;
   document.body.classList.remove('lift');
   if (L.skipEl) L.skipEl.hidden = true;
@@ -189,17 +236,17 @@ function finishLift() {
   Object.assign(p, { x: MID, y: MID + 0.62, h: groundH(tw(MID), tw(MID + 0.62)), vh: 0, yaw: -Math.PI / 2, pitch: -0.05 });
   Game.shake = 0;
   L.out = true;
-  L.leaveT = 0;
   if (L.done) L.done();
 }
 
-// Клетка уходит вниз, когда Томас отошёл от Ящика; створки захлопываются
+// Створки захлопываются, как только Томас отошёл от Ящика на 3 м и в клетке никого не осталось
 function updateBoxDoors(dt) {
   const L = Lift;
   if (L.active || !L.cage) return;
-  if (L.out && Math.hypot(Game.player.x - MID, Game.player.y - MID) > 2.6) {
-    L.leaveT += dt;
-    if (L.leaveT > 4) { L.out = false; L.doorDir = -1; }
+  if (L.out && L.doors >= 1) {
+    const p = Game.player;
+    const busy = Game.npcs.some(n => (n.fresh && n.fresh.stage === 'box') || boxGap(tw(n.x), tw(n.y)) < 0.8);
+    if (boxGap(tw(p.x), tw(p.y)) > 3 && !busy) { L.out = false; L.doorDir = -1; }
   }
   if (L.doorDir) {
     setBoxDoors(Math.max(0, Math.min(1, L.doors + L.doorDir * dt / 1.8)));
@@ -218,5 +265,4 @@ function boxOpen() {
   Lift.cage.visible = true;
   Lift.doorDir = 1;
   Lift.out = true;
-  Lift.leaveT = 0;
 }

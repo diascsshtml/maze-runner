@@ -5,7 +5,9 @@ const WIND = { uTime: { value: 0 }, uGust: { value: 1 } };   // uGust — сил
 const GLADE3D = { fires: [], torches: [], lanterns: [], water: null };
 const tw = t => t * S;                                  // тайл → метры
 // Насколько протоптаны тропы и вспахан огород: в новом поселении тропы едва заметны и проступают, когда Глэйд обживается
-const GROUND_LIFE = { tread: { value: 1 }, tilled: { value: 1 } };
+// hole — створки Ящика открыты: земля над шахтой не рисуется, сквозь проём видно клетку
+const GROUND_LIFE = { tread: { value: 1 }, tilled: { value: 1 }, hole: { value: 0 } };
+const BOX_HALF = 1.5;                                    // полуширина проёма Ящика, м
 
 // Ветер: травинки и листья качаются, верх сильнее низа (heightRef ≤ 0 — качается целиком)
 function windPatch(mat, strength, heightRef) {
@@ -199,6 +201,7 @@ function buildGladeGround(quality) {
   const mat = new THREE.MeshStandardMaterial({ map: grassM.map, normalMap: grassM.normal, roughness: 0.95, aoMap: Walls.ao, envMapIntensity: 0.6 });
   if (ASSETS.tex.leafy_grass) mat.color.setRGB(0.5, 0.66, 0.36);
   mat.userData.season = 'ground';
+  mat.side = THREE.DoubleSide;             // снизу, из шахты Ящика, земля тоже непрозрачна: вещи у края не висят в небе
   const P = LAYOUT.plantations;
   // Маски земли (тропы, грязь, гравий русла) — из terrain.js, одной текстурой
   groundH(0, 0);
@@ -213,6 +216,7 @@ function buildGladeGround(quality) {
   maskTex.magFilter = maskTex.minFilter = THREE.LinearFilter;
   maskTex.needsUpdate = true;
   patchWorldPos(mat, `
+    if (uBoxHole > 0.5 && max(abs(vWPos.x - ${tw(MID).toFixed(2)}), abs(vWPos.z - ${tw(MID).toFixed(2)})) < ${BOX_HALF.toFixed(2)}) discard;
     vec2 wt = vWPos.xz / ${S.toFixed(2)};
     float gn = gNoise(wt * 1.7);
     vec4 gm = texture2D(groundMask, (vWPos.xz - vec2(${M.x0.toFixed(3)})) / ${(M.cell * M.N).toFixed(3)});
@@ -232,8 +236,8 @@ function buildGladeGround(quality) {
     diffuseColor.rgb = mix(diffuseColor.rgb, mudC, smoothstep(0.1, 0.8, mud));
     diffuseColor.rgb = mix(diffuseColor.rgb, pathC * vec3(0.5, 0.52, 0.48), bed);`,
   'roughnessFactor = mix(roughnessFactor, 0.32, max(smoothstep(0.3, 0.9, mud) * 0.85, bed * 0.6));',
-  { uniforms: { dirtMap: { value: dirtMap }, soilMap: { value: soilMap }, pathMap: { value: pathMap }, groundMask: { value: maskTex }, uTread: GROUND_LIFE.tread, uTilled: GROUND_LIFE.tilled },
-    decl: 'uniform sampler2D dirtMap;\nuniform sampler2D soilMap;\nuniform sampler2D pathMap;\nuniform sampler2D groundMask;\nuniform float uTread;\nuniform float uTilled;\n' });
+  { uniforms: { dirtMap: { value: dirtMap }, soilMap: { value: soilMap }, pathMap: { value: pathMap }, groundMask: { value: maskTex }, uTread: GROUND_LIFE.tread, uTilled: GROUND_LIFE.tilled, uBoxHole: GROUND_LIFE.hole },
+    decl: 'uniform sampler2D dirtMap;\nuniform sampler2D soilMap;\nuniform sampler2D pathMap;\nuniform sampler2D groundMask;\nuniform float uTread;\nuniform float uTilled;\nuniform float uBoxHole;\n' });
   const seg = { high: 260, medium: 180, low: 120 }[quality];
   const geo = new THREE.PlaneGeometry(span, span, seg, seg);
   geo.rotateX(-Math.PI / 2);
@@ -250,6 +254,7 @@ function buildGladeGround(quality) {
     if (groundMask('path', x, z) > 0.25 + Math.random() * 0.35 || groundMask('mud', x, z) > 0.45 || groundMask('bed', x, z) > 0.05) return false;
     if (blockedRects.some(r => tx > r.x0 - 0.5 && tx < r.x1 + 0.5 && ty > r.y0 - 0.5 && ty < r.y1 + 0.5)) return false;
     if (Math.hypot(tx - LAYOUT.campfire.x, ty - LAYOUT.campfire.y) < 1.1) return false;
+    if (Math.max(Math.abs(x - tw(MID)), Math.abs(z - tw(MID))) < BOX_HALF + 0.6) return false;    // не над шахтой Ящика
     return !(ty > MID + 2 && Math.random() < 0.75);
   };
   const scatter = (count, place) => {
