@@ -510,6 +510,7 @@ function updateHud() {
   if (hud.hidden) return;
   const s = Math.max(0, Math.ceil(Game.timeLeft));
   setText('hud-day', `День ${Game.day}`);
+  if (hudCache.tally !== Game.day) { hudCache.tally = Game.day; $('hud-tally').style.setProperty('--d', Math.min(Game.day, 15)); }   // дни зарубками, как на стене
   // Без часов время видно только примерно (по солнцу); в последние полминуты — точно
   const exact = hasItem('watch') || s <= 30;
   setText('hud-time', exact ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : s > 90 ? `≈${Math.round(s / 60)} мин` : '≈1 мин');
@@ -1059,7 +1060,7 @@ async function boot() {
   showLoading(0, 'Загрузка…');
   // Шрифт нужен для табличек с кодом, но ждать его дольше секунды незачем
   if (document.fonts && document.fonts.load) {
-    await Promise.race([document.fonts.load('700 46px Tektur'), new Promise(r => setTimeout(r, 1200))]).catch(() => {});
+    await Promise.race([Promise.all(['700 46px Tektur', '700 40px Caveat', '600 20px Oswald', '20px "Rubik Dirt"'].map(f => document.fonts.load(f))), new Promise(r => setTimeout(r, 1500))]).catch(() => {});
   }
   await loadAssets(p => showLoading(p * 0.9, `Загрузка ${Math.round(p * 100)}%`));
   $('asset-note').hidden = !ASSETS.blocked;

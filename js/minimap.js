@@ -4,6 +4,13 @@
 const MAP_K = 8;             // пикселей на тайл
 const MINI_R = 12;           // мини-карта показывает 25×25 тайлов вокруг Томаса
 const Overlay = { mapT: 0, marks: [] };
+// Карта бегунов: углём по старой бумаге, Глэйд размыт зелёной краской, пометки красным и синим карандашом
+const MAPC = {
+  paper: '#cbbb93', floor: '#efe5c9', wall: '#3a3229', glade: '#93ad6c', house: '#7b6748', rubble: '#8c6a45', ivy: '#6f8f4a',
+  mark: '#b77b2c', gateOpen: '#a8834c', gateShut: '#a8392a', exit: '#2f9384', secret: '#3d8f80',
+  code: '#b5331f', symbol: '#bf7420', path: '#34619a', quest: '#c4501c', squad: '#4d7a2c', stranded: '#3c8a35', trap: '#b5331f',
+  shift: 'rgba(181, 51, 31, 0.2)', sector: 'rgba(58, 50, 41, 0.45)', me: '#b5331f', meEdge: '#2a2318',
+};
 
 function initMinimap() {
   const c = document.getElementById('minimap');
@@ -14,21 +21,21 @@ function initMinimap() {
 
 function tileColor(x, y) {
   const t = Maze.at(x, y);
-  if (t === T.WALL) return '#47443d';
-  if (t === T.SECRET) return Secrets.hintRoom && Secrets.hintRoom.door.x === x && Secrets.hintRoom.door.y === y ? '#4fb8a4' : '#47443d';
-  if (t === T.RUBBLE) return '#7a5e40';
-  if (t === T.IVY) return MazeDecor.ivyFound.has(y * SIZE + x) ? '#5f8a45' : '#47443d';    // проход за плющом — только найденный
-  if (t === T.MARK) return '#d39a3c';
-  if (t === T.GLADE) return decoBlocked(x, y) ? '#6b5a40' : '#58884a';
-  if (t === T.GATE) return Game.gate > 0.5 ? '#be4637' : '#aa8c5a';
-  if (t === T.EXIT) return '#82f5e1';
-  return '#b0a896';
+  if (t === T.WALL) return MAPC.wall;
+  if (t === T.SECRET) return Secrets.hintRoom && Secrets.hintRoom.door.x === x && Secrets.hintRoom.door.y === y ? MAPC.secret : MAPC.wall;
+  if (t === T.RUBBLE) return MAPC.rubble;
+  if (t === T.IVY) return MazeDecor.ivyFound.has(y * SIZE + x) ? MAPC.ivy : MAPC.wall;    // проход за плющом — только найденный
+  if (t === T.MARK) return MAPC.mark;
+  if (t === T.GLADE) return decoBlocked(x, y) ? MAPC.house : MAPC.glade;
+  if (t === T.GATE) return Game.gate > 0.5 ? MAPC.gateShut : MAPC.gateOpen;
+  if (t === T.EXIT) return MAPC.exit;
+  return MAPC.floor;
 }
 
 // Кусок карты: x0, y0 — левый верхний тайл, n — сколько тайлов по стороне, k — пикселей на тайл
 function drawMapView(g, x0, y0, n, k, big = false) {
   const p = Game.player;
-  g.fillStyle = '#0e0d0c';
+  g.fillStyle = MAPC.paper;
   g.fillRect(0, 0, n * k, n * k);
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
@@ -48,15 +55,15 @@ function drawMapView(g, x0, y0, n, k, big = false) {
   };
   // Прогноз Минхо: какие секторы ночью сдвинутся
   if (Story.flags.forecast && Game.shiftPlan && Game.phase === 'day') {
-    g.fillStyle = 'rgba(226, 85, 63, 0.16)';
+    g.fillStyle = MAPC.shift;
     for (let y = Math.max(0, y0); y < Math.min(SIZE, y0 + n); y++) {
       for (let x = Math.max(0, x0); x < Math.min(SIZE, x0 + n); x++) if (Game.shiftPlan.includes(sectorOfTile(x, y)) && Maze.isExplored(x, y)) g.fillRect((x - x0) * k, (y - y0) * k, k, k);
     }
   }
-  for (const it of Game.items) if (!it.taken && Maze.isExplored(it.x, it.y)) dot(it.x, it.y, k * 0.6, '#ffcd46');
-  if (Game.exitOpen) dot(Maze.exit.x, Maze.exit.y, k * (0.8 + Math.sin(Game.time * 6) * 0.25), '#8ff0dc');
+  for (const it of Game.items) if (!it.taken && Maze.isExplored(it.x, it.y)) dot(it.x, it.y, k * 0.6, MAPC.code);
+  if (Game.exitOpen) dot(Maze.exit.x, Maze.exit.y, k * (0.8 + Math.sin(Game.time * 6) * 0.25), MAPC.exit);
   // Замеченные ловушки, найденные знаки, отряд и раненый, которого надо спасти
-  g.strokeStyle = '#e2553f';
+  g.strokeStyle = MAPC.trap;
   g.lineWidth = 1.5;
   for (const t of Secrets.traps) {
     if (!t.armed || !t.seen || !inView(t.x, t.y)) continue;
@@ -66,19 +73,19 @@ function drawMapView(g, x0, y0, n, k, big = false) {
     g.moveTo(ax + k - 1, ay + 1); g.lineTo(ax + 1, ay + k - 1);
     g.stroke();
   }
-  for (const s of Secrets.symbols) if (s.found) dot(s.cell.x + s.d.x * 0.5, s.cell.y + s.d.y * 0.5, k * 0.45, '#f0a64a');
+  for (const s of Secrets.symbols) if (s.found) dot(s.cell.x + s.d.x * 0.5, s.cell.y + s.d.y * 0.5, k * 0.45, MAPC.symbol);
   // Безопасные пути бегунов — пунктир; цель задания бегунов — флажок
-  for (const path of [...(Story.flags.safePaths || []), Story.flags.trail || []]) for (const t of path) dot(t.x, t.y, k * 0.28, '#9fd2ff');
+  for (const path of [...(Story.flags.safePaths || []), Story.flags.trail || []]) for (const t of path) dot(t.x, t.y, k * 0.28, MAPC.path);
   const rq = runnerQuestTarget();
-  if (rq) dot(rq.x, rq.y, k * (0.75 + Math.sin(Game.time * 4) * 0.2), '#ffd166');
-  for (const n2 of Squad.members) dot(n2.x, n2.y, k * 0.5, '#9cc06d');
-  if (Squad.stranded) dot(Squad.stranded.x, Squad.stranded.y, k * (0.7 + Math.sin(Game.time * 5) * 0.25), '#b6f08a');
+  if (rq) dot(rq.x, rq.y, k * (0.75 + Math.sin(Game.time * 4) * 0.2), MAPC.quest);
+  for (const n2 of Squad.members) dot(n2.x, n2.y, k * 0.5, MAPC.squad);
+  if (Squad.stranded) dot(Squad.stranded.x, Squad.stranded.y, k * (0.7 + Math.sin(Game.time * 5) * 0.25), MAPC.stranded);
   // Номера секторов на большой карте — те же, что на табличках в Лабиринте
   if (big) {
-    g.font = `700 ${k * 2.2}px Tektur, sans-serif`;
+    g.font = `600 ${k * 2.4}px Oswald, sans-serif`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillStyle = 'rgba(242, 165, 65, 0.55)';
+    g.fillStyle = MAPC.sector;
     for (let s = 1; s <= 8; s++) {
       const a = (s - 1) * Math.PI / 4 - Math.PI / 2, r = SIZE * 0.36;
       g.fillText(ROMAN[s - 1], (MID + Math.cos(a) * r + 0.5) * k, (MID + Math.sin(a) * r + 0.5) * k);
@@ -89,8 +96,8 @@ function drawMapView(g, x0, y0, n, k, big = false) {
   g.translate((p.x - x0 + 0.5) * k, (p.y - y0 + 0.5) * k);
   g.rotate(p.yaw);
   const a = k * (big ? 1.4 : 1.1);
-  g.fillStyle = '#ffffff';
-  g.strokeStyle = '#151411';
+  g.fillStyle = MAPC.me;
+  g.strokeStyle = MAPC.meEdge;
   g.lineWidth = 1.5;
   g.beginPath();
   g.moveTo(a, 0);
@@ -154,20 +161,20 @@ function renderMap(body) {
   const legend = el('ul', 'legend'), item = (sw, text) => { const li = el('li'); li.append(sw, text); legend.append(li); };
   const swatch = (color, round) => { const s = el('span', 'sw' + (round ? ' round' : '')); s.style.background = color; return s; };
   const arrow = svgIcon('i-arrow');
-  arrow.style.color = '#fff';
+  arrow.style.color = MAPC.me;
   item(arrow, 'Ты и куда смотришь');
-  item(swatch('#58884a'), 'Глэйд');
-  item(swatch(Game.gate > 0.5 ? '#be4637' : '#aa8c5a'), Game.gate > 0.5 ? 'Ворота закрыты' : 'Ворота открыты');
-  item(swatch('#b0a896'), 'Пройденные коридоры');
-  item(swatch('#ffcd46', true), 'Фрагмент кода');
-  item(swatch('#f0a64a', true), 'Найденный знак сектора');
+  item(swatch(MAPC.glade), 'Глэйд');
+  item(swatch(Game.gate > 0.5 ? MAPC.gateShut : MAPC.gateOpen), Game.gate > 0.5 ? 'Ворота закрыты' : 'Ворота открыты');
+  item(swatch(MAPC.floor), 'Пройденные коридоры');
+  item(swatch(MAPC.code, true), 'Фрагмент кода');
+  item(swatch(MAPC.symbol, true), 'Найденный знак сектора');
   const trap = svgIcon('i-trap');
-  trap.style.color = '#e2553f';
+  trap.style.color = MAPC.trap;
   item(trap, 'Замеченная ловушка');
-  item(swatch('#7a5e40'), 'Завал');
-  if (Squad.members.length) item(swatch('#9cc06d', true), 'Отряд');
-  if (Game.exitOpen) item(swatch('#8ff0dc', true), 'Выход из Лабиринта');
-  if (Story.flags.forecast) item(swatch('rgba(226, 85, 63, 0.5)'), 'Сдвинется этой ночью');
+  item(swatch(MAPC.rubble), 'Завал');
+  if (Squad.members.length) item(swatch(MAPC.squad, true), 'Отряд');
+  if (Game.exitOpen) item(swatch(MAPC.exit, true), 'Выход из Лабиринта');
+  if (Story.flags.forecast) item(swatch('rgba(181, 51, 31, 0.5)'), 'Сдвинется этой ночью');
   side.append(rose, facts, el('h3', '', 'Обозначения'), legend);
   layout.append(stage, side);
   body.append(layout);

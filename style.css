@@ -1,4 +1,4 @@
-/* Интерфейс «Бегущего в лабиринте»: один тёмный стиль на всё.
+/* Интерфейс «Бегущего в лабиринте»: вещи Глэйда и Лабиринта (см. «обшивку» ниже).
    Бетон стен — фон и рамки, плющ — силы и успех, закат — главный акцент и бегуны,
    ржавчина — раны и опасность, бирюза — техника создателей и выход.
    Размеры в rem: корень растёт с шириной окна и с масштабом из настроек. */
@@ -29,7 +29,8 @@
   --paper-2: #ddd0b0;
   --paper-ink: #2c261d;
   --paper-mark: #7a5a2c;
-  --font-display: 'Tektur', 'Rubik', system-ui, sans-serif;
+  --font-display: 'Oswald', 'Rubik', system-ui, sans-serif;        /* трафарет на ящиках из Ящика */
+  --font-title: 'Rubik Dirt', 'Oswald', system-ui, sans-serif;      /* стёртая краска по бетону */
   --font-body: 'Rubik', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-hand: 'Caveat', 'Rubik', cursive;
   --gap: 0.75rem;
@@ -843,6 +844,355 @@ body.photo-mode #hud, body.photo-mode #toasts { display: none; }
 .dpad button { font-size: 1.2rem; }
 #t-sprint { width: 5.2rem; height: 5.2rem; border-radius: 50%; background: rgba(156, 192, 109, 0.28); }
 #t-action, #t-pause, #t-bag { padding: 0.6rem 0.9rem; }
+
+/* ---------- обшивка: из чего сделан интерфейс ----------
+   Всё — вещи Глэйда и Лабиринта. Меню и пауза — плита из бетона стен, надписи стёртой краской и мелом бегунов.
+   Окна — листы старой бумаги на скотче: чернила, карандаш, записи от руки. В HUD — нашивка из мешковины,
+   верёвка вместо полосы сил, жетоны с кодом, латунный компас, ржавая пластина ворот, карта углём,
+   дощатые ячейки для вещей, записки на гвоздиках. Раскладка блоков — выше; здесь только их вид. */
+
+:root {
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .24 0 0 0 0 .13 0 0 0 .3 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)'/%3E%3C/svg%3E");
+  --stains: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='520' height='520'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.011' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .42 0 0 0 0 .29 0 0 0 0 .12 0 0 0 .9 -.38'/%3E%3C/filter%3E%3Crect width='520' height='520' filter='url(%23s)'/%3E%3C/svg%3E");
+  --speckle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.6' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .78 0 0 0 0 .76 0 0 0 0 .72 0 0 0 .16 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23c)'/%3E%3C/svg%3E");
+  --chalk-line: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='10' preserveAspectRatio='none'%3E%3Cpath d='M3 6 C 50 2, 95 9, 150 5 S 240 3, 297 6' stroke='%23ece5d4' stroke-opacity='.75' stroke-width='3.2' fill='none' stroke-linecap='round' stroke-dasharray='40 3 22 2 60 4 30 2'/%3E%3C/svg%3E");
+  --pencil-line: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='8' preserveAspectRatio='none'%3E%3Cpath d='M2 5 C 60 2, 120 7, 180 4 S 260 3, 298 5' stroke='%23b5331f' stroke-opacity='.85' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  --weave: repeating-linear-gradient(45deg, rgba(236, 226, 200, 0.035) 0 1px, transparent 1px 4px), repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 4px);
+  --concrete: var(--speckle), var(--stains), linear-gradient(160deg, #36342f, #262521 55%, #2d2b26);
+  --paper-face: var(--grain), var(--stains), linear-gradient(175deg, #ece2c7, #ddcfa9 70%, #d3c194);
+  --soot: linear-gradient(180deg, rgba(20, 18, 14, 0.82), rgba(13, 12, 9, 0.84));
+}
+
+/* Лист бумаги: зерно, пятна, потемневшие края. Внутри — свои цвета: тёмные чернила по светлому */
+.sheet, .win.frame, .pause-help.frame, .toast, #tip, #map-wrap, #held-info, #prompt, #bubble, .talk-line {
+  --ink: #2a2318;
+  --ink-2: #5a4c37;
+  --ink-3: #85755b;
+  --amber: #a8541c;
+  --amber-2: #c46a2a;
+  --amber-ink: #fff3df;
+  --amber-glow: rgba(168, 84, 28, 0.14);
+  --moss: #4d7a2c;
+  --rust: #a8321e;
+  --rust-ink: #7d1f10;
+  --teal: #2f8274;
+  --night: #3f5a96;
+  --well: rgba(90, 62, 26, 0.07);
+  --well-2: rgba(90, 62, 26, 0.15);
+  --stroke: rgba(70, 50, 25, 0.22);
+  --stroke-2: rgba(70, 50, 25, 0.42);
+  --surface: rgba(255, 249, 232, 0.45);
+  --surface-strong: rgba(255, 249, 232, 0.6);
+  color: var(--ink);
+  background: var(--paper-face);
+  box-shadow: inset 0 0 2.6rem rgba(94, 64, 24, 0.32), inset 0 0 0.35rem rgba(94, 64, 24, 0.35), 0 0.8rem 2rem rgba(0, 0, 0, 0.5);
+}
+.win.frame, .pause-help.frame { border: 0; border-radius: 0.2rem; }
+/* Скотч по углам листа */
+.win.frame::before, .win.frame::after, #tip::before, #map-wrap::before, .pause-help.frame::before {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  top: -0.55rem;
+  width: 4.2rem;
+  height: 1.15rem;
+  background: linear-gradient(rgba(240, 232, 205, 0.62), rgba(222, 210, 175, 0.55));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+.win.frame::before { left: 1.6rem; transform: rotate(-3deg); }
+.win.frame::after { right: 1.8rem; transform: rotate(2.5deg); }
+.win { overflow: visible; }
+.win > .win-body { overflow-y: auto; }
+.win kbd, .sheet kbd, .toast kbd, #prompt kbd, #tip kbd, .pause-help kbd, #map-wrap kbd {
+  color: var(--ink);
+  background: linear-gradient(#f1e8d0, #d9c9a1);
+  border-color: rgba(70, 50, 25, 0.45);
+}
+
+/* Надписи: трафарет на ящиках (Oswald), стёртая краска (Rubik Dirt), почерк (Caveat) */
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: 0.04em; }
+.win-head h2 { font-size: 1.6rem; letter-spacing: 0.06em; }
+.win-head > .ico { color: var(--ink-2); }
+.win-head .sub { font: 600 1.1rem/1.1 var(--font-hand); color: var(--ink-2); }
+.kicker { font: 600 0.78rem/1.2 var(--font-display); letter-spacing: 0.22em; }
+
+/* Вкладки — закладки в тетради; выбранная подчёркнута красным карандашом */
+.win-tabs { border-bottom: 1px solid var(--stroke-2); }
+.tab { font: 600 0.88rem var(--font-display); letter-spacing: 0.1em; border-bottom: 0; padding-bottom: 0.7rem; }
+.tab.on { color: var(--ink); background: var(--pencil-line) bottom / 100% 0.5rem no-repeat; }
+.win-foot { border-top: 1px dashed var(--stroke-2); }
+
+/* Кнопки: на бумаге — штамп тёмными чернилами, на тёмном — огонь факела */
+.btn { font: 600 0.9rem/1.1 var(--font-display); letter-spacing: 0.12em; border-radius: 0.2rem; box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
+.sheet .btn:not(.ghost):not(.danger), .win .btn:not(.ghost):not(.danger) { color: #f3ead3; background: #3a2e20; border-color: #2a2017; }
+.sheet .btn:not(.ghost):not(.danger):hover, .win .btn:not(.ghost):not(.danger):hover { background: #a8541c; border-color: #a8541c; }
+.win .btn.ghost { box-shadow: none; }
+.chip { border-radius: 0.2rem; }
+.win .chip.on { color: #f3ead3; background: #3a2e20; border-color: #2a2017; }
+.seg { border-radius: 0.2rem; }
+.win .seg button.on { color: #f3ead3; background: #3a2e20; }
+.win .toggle input:checked + i { background: rgba(77, 122, 44, 0.25); border-color: var(--moss); }
+.win .toggle input:checked + i::after { background: var(--moss); }
+.win input[type="range"]::-webkit-slider-runnable-track { background: linear-gradient(90deg, var(--ink-2) var(--p, 50%), var(--well-2) var(--p, 50%)); }
+.win input[type="range"]::-webkit-slider-thumb { background: #f3ead3; border-color: var(--ink); }
+
+/* Карточки внутри листа — карандашная рамка */
+.win .quest, .win .bcard, .win .res, .win .meter, .win .stat, .win .help-item, .win .inv-slot, .win .talk-opt {
+  border-radius: 0.15rem;
+}
+.win .quest { border-left-width: 4px; }
+.win .inv-slot { background: rgba(255, 250, 236, 0.35); }
+.win .inv-slot.sel { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink) inset; background: rgba(255, 250, 236, 0.6); }
+.win .inv-slot.empty { background: transparent; }
+.win .inv-detail { background: rgba(255, 250, 236, 0.35); border: 1px dashed var(--stroke-2); }
+.win .paper { box-shadow: 0 0.35rem 0.9rem rgba(60, 40, 15, 0.35); }
+
+/* Разговор: реплика — от руки, варианты — строки в тетради */
+.talk-line { padding: 0.7rem 1rem; font: 600 1.45rem/1.25 var(--font-hand); border-left: 3px solid var(--ink-2); border-radius: 0.15rem; box-shadow: none; background: rgba(255, 250, 236, 0.4); }
+.talk-who h2 { font-size: 1.7rem; }
+.talk-opt { background: transparent; border: 0; border-bottom: 1px dashed var(--stroke-2); border-radius: 0; }
+.talk-opt:hover:not(:disabled), .talk-opt:focus-visible { background: var(--pencil-line) bottom / 100% 0.4rem no-repeat, rgba(255, 250, 236, 0.35); border-color: transparent; }
+
+/* Карта — тоже бумага (её рисует minimap.js углём) */
+.map-stage { background: #cbbb93; border: 1px solid var(--stroke-2); border-radius: 0.15rem; box-shadow: inset 0 0 1.4rem rgba(94, 64, 24, 0.35); }
+#bigmap { image-rendering: auto; }
+.map-north { color: var(--rust); background: rgba(255, 249, 232, 0.7); border-color: var(--stroke-2); }
+.rose { border-color: var(--stroke-2); background: radial-gradient(circle, rgba(255, 249, 232, 0.5), transparent 70%); }
+
+/* ---------- меню и пауза: бетонная плита ---------- */
+
+#screen-title { background-color: #0b0a09; }
+.menu-veil {
+  background:
+    linear-gradient(90deg, rgba(10, 9, 8, 0.93) 0%, rgba(10, 9, 8, 0.8) 24%, rgba(10, 9, 8, 0.3) 48%, rgba(10, 9, 8, 0) 66%),
+    linear-gradient(0deg, rgba(10, 9, 8, 0.78), rgba(10, 9, 8, 0) 30%),
+    radial-gradient(ellipse at 70% 40%, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.4));
+}
+.menu-col { z-index: 0; }
+.menu-col::before {
+  content: '';
+  position: absolute;
+  inset: 0 -3rem 0 0;
+  z-index: -1;
+  background: var(--speckle), var(--stains);
+  opacity: 0.55;
+  -webkit-mask-image: linear-gradient(90deg, #000 55%, transparent);
+  mask-image: linear-gradient(90deg, #000 55%, transparent);
+  pointer-events: none;
+}
+.logo .kicker { font: 700 1.35rem/1 var(--font-hand); letter-spacing: 0.02em; text-transform: none; color: var(--ink-2); }
+.logo-title {
+  font: 400 clamp(2.8rem, 4.6rem, 12vw)/0.92 var(--font-title);
+  letter-spacing: 0.01em;
+  color: #e9e2cf;
+  text-shadow: 0 0.06em 0 rgba(0, 0, 0, 0.5), 0 0 1.4em rgba(0, 0, 0, 0.55);
+}
+.logo-title span + span { color: var(--amber); font-size: 0.6em; letter-spacing: 0.03em; margin-top: 0.12em; }
+.logo-tag { font: 600 1.3rem/1.2 var(--font-hand); color: var(--ink-2); max-width: 25rem; }
+
+/* Пункты меню — надписи мелом на стене: при наведении слева стрелка бегуна и черта мелом под словом */
+.menu-item {
+  grid-template-columns: 2rem 1fr;
+  min-height: 3.3rem;
+  padding: 0.35rem 0.6rem 0.35rem 0.2rem;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+.menu-item > .ico:not(.mi-go), .menu-item .mi-go { display: none; }
+.menu-item::before {
+  content: '→';
+  justify-self: center;
+  font: 700 1.9rem/1 var(--font-hand);
+  color: var(--amber);
+  opacity: 0;
+  transform: translateX(-0.5rem);
+  transition: opacity 0.18s, transform 0.2s var(--ease);
+}
+.mi-text b { justify-self: start; padding-bottom: 0.15rem; font: 600 1.55rem/1.05 var(--font-display); letter-spacing: 0.1em; color: #e9e2cf; background: var(--chalk-line) left bottom / 0 0.55rem no-repeat; transition: background-size 0.3s var(--ease), color 0.18s; }
+.mi-text small { font: 600 1.12rem/1.1 var(--font-hand); color: var(--ink-3); }
+.menu-item:hover, .menu-item:focus-visible, .menu-item.sel { transform: none; background: none; border: 0; }
+.menu-item:hover::before, .menu-item:focus-visible::before, .menu-item.sel::before { opacity: 1; transform: none; }
+.menu-item:hover .mi-text b, .menu-item:focus-visible .mi-text b, .menu-item.sel .mi-text b { color: #fff8e6; background-size: 100% 0.55rem; }
+.menu-item.primary .mi-text b { color: var(--amber-2); }
+.menu-item.danger:hover { background: none; }
+.menu-item.danger:hover .mi-text b { color: #f0a08c; }
+.menu-item.danger::before { color: #e0705a; }
+.menu-list.compact .menu-item { min-height: 2.9rem; }
+.menu-list.compact .mi-text b { font-size: 1.3rem; }
+.menu-caption b, .lift-caption b { font: 600 0.95rem var(--font-display); letter-spacing: 0.24em; }
+.menu-caption span, .lift-caption span { font: 600 1.25rem/1.1 var(--font-hand); }
+.lift-caption b { font-size: 1.3rem; }
+.lift-caption span { font-size: 1.45rem; }
+.load-bar { height: 0.45rem; background: rgba(0, 0, 0, 0.45); border-radius: 0.3rem; }
+.load-bar i { background: repeating-linear-gradient(115deg, #d2ae72 0 0.32rem, #a9834b 0.32rem 0.64rem); border-radius: 0.3rem; }
+#load-text { font-family: var(--font-hand); font-size: 1.15rem; letter-spacing: 0; text-transform: none; font-weight: 600; }
+
+/* Пауза, подтверждения, конец игры — плита бетона с выбитыми краями */
+.pause-card.frame, .card.frame, #screen-exit .card {
+  background: var(--concrete);
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  border-radius: 0.15rem;
+  box-shadow: inset 0 0 0 1px rgba(236, 228, 207, 0.06), inset 0 0 2.5rem rgba(0, 0, 0, 0.55), 0 1rem 2.5rem rgba(0, 0, 0, 0.6);
+}
+.pause-card h2, .card h2 { font: 400 2.6rem/1 var(--font-title); letter-spacing: 0.02em; }
+.pause-help.frame { padding: 1.5rem 1.6rem 1.4rem; transform: rotate(0.8deg); }
+.pause-help h3 { font: 700 1.45rem/1 var(--font-hand); letter-spacing: 0; text-transform: none; color: var(--ink); }
+.pause-help::before { left: 45%; transform: rotate(-2deg); }
+.pause-help .keylist dd { color: var(--ink-2); }
+.stat { background: rgba(0, 0, 0, 0.25); border-color: rgba(236, 228, 207, 0.12); }
+
+/* ---------- HUD ---------- */
+
+/* Нашивка из мешковины: день с зарубками, жизни, верёвка сил, жетоны с кодом */
+.hud-tl.plate {
+  background: var(--weave), var(--soot);
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  border-radius: 0.25rem;
+  outline: 1px dashed rgba(236, 226, 200, 0.22);
+  outline-offset: -0.3rem;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.4);
+}
+#hud-day { font: 600 1.05rem/1 var(--font-display); letter-spacing: 0.16em; }
+#hud-tally {
+  flex: none;
+  width: calc(var(--d, 1) * 0.32rem);
+  height: 0.85rem;
+  margin-right: auto;
+  background: repeating-linear-gradient(90deg, rgba(236, 228, 207, 0.7) 0 2px, transparent 2px 0.32rem);
+  -webkit-mask-image: linear-gradient(176deg, #000 70%, rgba(0, 0, 0, 0.55));
+  mask-image: linear-gradient(176deg, #000 70%, rgba(0, 0, 0, 0.55));
+}
+#hud-season { font: 600 1.02rem/1 var(--font-hand); }
+#hearts .ico { filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.6)); }
+#stamina { height: 0.62rem; background: rgba(0, 0, 0, 0.5); border-radius: 0.4rem; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7); }
+#stamina-fill { background: repeating-linear-gradient(115deg, #d4b27a 0 0.3rem, #a8854f 0.3rem 0.6rem); border-radius: 0.4rem; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -1px 0 rgba(0, 0, 0, 0.3); }
+#stamina.tired #stamina-fill { background: repeating-linear-gradient(115deg, #c46a4a 0 0.3rem, #8f3e28 0.3rem 0.6rem); }
+#stamina.boost #stamina-fill { background: repeating-linear-gradient(115deg, #f0c07a 0 0.3rem, #c98c3a 0.3rem 0.6rem); }
+.v-label { font: 600 0.72rem var(--font-display); letter-spacing: 0.2em; }
+/* Жетоны: пустой — вмятина на мешковине, найденный — блестящая сталь с выбитым словом */
+#code { gap: 0.3rem 0.28rem; }
+.slot {
+  position: relative;
+  padding: 0.16rem 0.2rem 0.16rem 0.6rem;
+  font: 600 0.66rem/1.25 var(--font-display);
+  letter-spacing: 0.1em;
+  color: rgba(236, 228, 207, 0.3);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(236, 228, 207, 0.12);
+  border-radius: 0.5rem 0.25rem 0.25rem 0.5rem;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.slot::before { content: ''; position: absolute; left: 0.2rem; top: 50%; width: 0.22rem; height: 0.22rem; margin-top: -0.11rem; border-radius: 50%; background: rgba(0, 0, 0, 0.6); box-shadow: 0 0 0 1px rgba(236, 228, 207, 0.15); }
+.slot.got { color: #2c2a26; background: linear-gradient(160deg, #e6e7e2, #a9aba6 55%, #c9cbc6); border: 1px solid #6f716c; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(0, 0, 0, 0.6); text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5); }
+.v-alert { border-radius: 0.2rem; }
+
+/* Компас — латунная лента с гравировкой */
+.compass-bg {
+  background: linear-gradient(180deg, #6a522c, #4a381c 45%, #392b15);
+  border: 1px solid #1d150a;
+  border-radius: 0.2rem;
+  box-shadow: inset 0 1px 0 rgba(255, 220, 150, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+}
+.ctick { background: rgba(240, 214, 160, 0.45); }
+.ctick.mid { background: rgba(240, 214, 160, 0.75); }
+.clbl { font: 600 0.78rem/1 var(--font-display); color: #e8d6ad; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6); }
+.clbl.cardinal { font-size: 1rem; color: #fbeccb; }
+.clbl.north { color: #ff8d6b; }
+.compass-needle { width: 0; height: 0; margin-left: -0.32rem; background: none; border: 0.32rem solid transparent; border-top: 0.45rem solid #ff8d6b; }
+.compass-mark small { font: 600 0.62rem/1 var(--font-display); letter-spacing: 0.04em; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
+.compass-mark.home { color: #ffd38a; }
+#compass-deg { font: 600 0.72rem var(--font-display); color: #e8d6ad; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+
+/* Часы ворот — ржавая пластина на заклёпках */
+#clock {
+  --rivet: radial-gradient(circle, #c99a72 0 0.11rem, #4a2c19 0.15rem, transparent 0.19rem);
+  background:
+    var(--rivet) 0.15rem 0.15rem / 0.6rem 0.6rem no-repeat,
+    var(--rivet) calc(100% - 0.15rem) 0.15rem / 0.6rem 0.6rem no-repeat,
+    var(--rivet) 0.15rem calc(100% - 0.15rem) / 0.6rem 0.6rem no-repeat,
+    var(--rivet) calc(100% - 0.15rem) calc(100% - 0.15rem) / 0.6rem 0.6rem no-repeat,
+    var(--speckle), var(--stains),
+    linear-gradient(135deg, #5c3a22, #3b2516 55%, #4c2f1c);
+  border: 1px solid rgba(0, 0, 0, 0.7);
+  border-radius: 0.2rem;
+  box-shadow: inset 0 1px 0 rgba(255, 190, 140, 0.18), inset 0 0 1.2rem rgba(0, 0, 0, 0.45), 0 0.4rem 1rem rgba(0, 0, 0, 0.45);
+}
+#clock > .ico { color: #e8b27a; }
+#hud-time { font: 700 1.9rem/1 var(--font-display); letter-spacing: 0.04em; color: #f3e6cf; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7); }
+#hud-time-label { font: 600 1.02rem/1 var(--font-hand); color: #d9bf9c; }
+.clock-bar { height: 0.32rem; background: rgba(0, 0, 0, 0.55); border-radius: 0.2rem; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.7); }
+#clock-fill { background: linear-gradient(90deg, #e8a046, #f5c27a); border-radius: 0.2rem; }
+#hud.urgent #clock { box-shadow: inset 0 0 1.2rem rgba(0, 0, 0, 0.45), 0 0 1.2rem rgba(200, 60, 30, 0.45); }
+
+/* Мини-карта — бумажная карта бегуна, на скотче, чуть косо */
+#map-wrap { padding: 0.4rem; border-radius: 0.15rem; transform: rotate(-1.2deg); backdrop-filter: none; -webkit-backdrop-filter: none; }
+#map-wrap::before { left: 50%; margin-left: -2.1rem; transform: rotate(2deg); }
+#minimap { border-radius: 0.1rem; background: #cbbb93; box-shadow: inset 0 0 0.6rem rgba(94, 64, 24, 0.4); }
+.map-n { font: 700 0.8rem var(--font-display); color: var(--rust); text-shadow: 0 0 2px rgba(255, 249, 232, 0.9); }
+#btn-map { color: var(--ink); background: rgba(240, 231, 208, 0.92); border: 1px solid rgba(70, 50, 25, 0.4); border-radius: 0.15rem; font: 600 0.78rem var(--font-display); letter-spacing: 0.08em; }
+
+/* Вещи: дощатые ячейки-ящики; в руке — подсвечена огнём */
+.hslot, .hweight {
+  background: repeating-linear-gradient(90deg, rgba(255, 230, 190, 0.035) 0 1px, transparent 1px 0.9rem), linear-gradient(180deg, #3a2c1e, #241a11);
+  border: 1px solid #120c07;
+  border-radius: 0.15rem;
+  box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.12), inset 0 0 0 0.18rem rgba(0, 0, 0, 0.25), 0 0.25rem 0.6rem rgba(0, 0, 0, 0.45);
+}
+.hslot b { font: 600 0.7rem var(--font-display); color: rgba(236, 222, 190, 0.55); }
+.hslot.held { border-color: #e8a046; box-shadow: inset 0 0 0 1px #e8a046, 0 0 1.1rem rgba(232, 160, 70, 0.45); }
+.hslot.held b { color: #f5c27a; }
+.hslot.empty { background: rgba(20, 15, 10, 0.45); border: 1px dashed rgba(236, 222, 190, 0.18); box-shadow: none; }
+.hweight { font: 600 0.78rem var(--font-display); color: #d9c7a3; }
+#held-info { padding: 0.25rem 0.8rem; border: 0; border-radius: 0.1rem; transform: rotate(-0.6deg); }
+#held-info b { font: 600 0.95rem var(--font-display); letter-spacing: 0.08em; color: var(--ink); }
+#held-info span { font: 600 1.05rem/1.1 var(--font-hand); color: var(--ink-2); }
+
+/* Подсказка «E — сделать»: бирка; подсказки клавиш — мелом */
+#prompt { border: 0; border-radius: 0.15rem; font: 500 0.92rem var(--font-body); }
+#keyhints div { font: 600 1.05rem/1 var(--font-hand); color: #e3dac4; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95); }
+#keyhints kbd { background: rgba(20, 18, 14, 0.7); border-color: rgba(236, 228, 207, 0.35); color: #ece4cf; }
+
+/* Сообщения — записки на гвоздике; тревога — с красной пометкой карандашом */
+.toast {
+  position: relative;
+  padding: 0.65rem 0.95rem 0.65rem 1.5rem;
+  font-size: 0.9rem;
+  border: 0;
+  border-radius: 0.1rem;
+}
+.toast::before { content: ''; position: absolute; left: 0.5rem; top: 0.75rem; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #c9ccc6, #6b6e6a 60%, #2e302d); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
+.toast > .ico { display: none; }
+.toast:nth-child(odd) { transform: rotate(-0.5deg); }
+.toast:nth-child(even) { transform: rotate(0.45deg); }
+.toast.good { box-shadow: inset 4px 0 0 #4d7a2c, inset 0 0 2rem rgba(94, 64, 24, 0.3), 0 0.5rem 1.2rem rgba(0, 0, 0, 0.45); }
+.toast.warn { background: var(--paper-face); box-shadow: inset 4px 0 0 #c46a2a, inset 0 0 2rem rgba(94, 64, 24, 0.3), 0 0.5rem 1.2rem rgba(0, 0, 0, 0.45); }
+.toast.danger { background: var(--paper-face); box-shadow: inset 4px 0 0 #a8321e, inset 0 0 2rem rgba(120, 30, 15, 0.3), 0 0.5rem 1.2rem rgba(0, 0, 0, 0.45); }
+.toast.danger::after { content: ''; position: absolute; inset: auto 0.8rem 0.35rem 1.5rem; height: 0.4rem; background: var(--pencil-line) center / 100% 100% no-repeat; opacity: 0.7; }
+.toast.out { transform: translateY(-0.4rem) rotate(0deg); }
+
+/* Обучение — заметка на скотче, шаг написан карандашом */
+#tip { border: 0; border-radius: 0.1rem; padding: 0.9rem 0.95rem 0.8rem; transform: rotate(-0.8deg); }
+#tip::before { left: 1.2rem; transform: rotate(-4deg); }
+#tip-step { font: 700 1.2rem/1 var(--font-hand); letter-spacing: 0; text-transform: none; color: #4d7a2c; }
+#tip-text { font-size: 0.9rem; }
+#tip-skip { color: var(--ink-3); }
+
+/* Реплика жителя — клочок бумаги */
+#bubble { border-radius: 0.1rem; font: 600 1.2rem/1.15 var(--font-hand); max-width: 17rem; }
+#bubble b { font: 600 0.72rem var(--font-display); letter-spacing: 0.14em; }
+#bubble::after { border-top-color: #ddcfa9; }
+
+/* Прицел — точка мела */
+#crosshair { background: rgba(236, 228, 207, 0.85); }
+#hud.target #crosshair { background: #e8a046; }
+
+/* Кнопки для пальцев — тоже дерево */
+#touch button { background: linear-gradient(180deg, rgba(58, 44, 30, 0.85), rgba(36, 26, 17, 0.85)); border-color: rgba(0, 0, 0, 0.6); border-radius: 0.2rem; font-family: var(--font-display); }
+
 
 /* ---------- движение ---------- */
 

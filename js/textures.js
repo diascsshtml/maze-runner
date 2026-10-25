@@ -438,16 +438,25 @@ function wordTexture(word) {
   return t;
 }
 
+// Имя над жителем — бирка из бумаги, имя написано от руки (как в интерфейсе)
 function labelTexture(text) {
   const W = 256, H = 64, c = makeCanvas(W, H), g = c.getContext('2d');
-  g.font = '600 34px Rubik, system-ui, sans-serif';
+  g.font = '700 40px Caveat, Rubik, system-ui, sans-serif';
+  const w = Math.min(W - 8, g.measureText(text).width + 30), x0 = (W - w) / 2;
+  g.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  g.fillRect(x0 + 2, 12, w, H - 20);
+  const paper = g.createLinearGradient(0, 8, 0, H - 10);
+  paper.addColorStop(0, '#ece2c7');
+  paper.addColorStop(1, '#d5c49c');
+  g.fillStyle = paper;
+  g.fillRect(x0, 9, w, H - 20);
+  g.strokeStyle = 'rgba(94, 64, 24, 0.55)';
+  g.lineWidth = 2;
+  g.strokeRect(x0 + 1, 10, w - 2, H - 22);
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.lineWidth = 7;
-  g.strokeStyle = 'rgba(10, 10, 8, 0.8)';
-  g.strokeText(text, W / 2, H / 2);
-  g.fillStyle = '#f1ead8';
-  g.fillText(text, W / 2, H / 2);
+  g.fillStyle = '#2a2318';
+  g.fillText(text, W / 2, H / 2 - 1);
   const t = new THREE.CanvasTexture(c);
   t.encoding = THREE.sRGBEncoding;
   return t;
