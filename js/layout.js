@@ -1,31 +1,56 @@
-// Планировка Глэйда по схеме из фильма (тайлы 27..51, Ящик в центре 39,39; север сверху).
+// Планировка Глэйда по схеме из фильма (границы берутся из GLADE_T0..GLADE_T1; север сверху).
 //  Север: поляна. СЗ — кузница, спальни, Кутузка; З — столовая и костёр, лазарет на опушке; СВ — плантации,
 //  под ними кладовая и сарай с инструментами. Центр: Ящик и Башня-дерево.
 //  Юг: густой лес, река с мостиком, бродом и упавшим деревом, кладбище, картохранилище, живодерня.
 //  Постройки связаны тропами; между ними холмы, низины с грязью и лужами.
 
-const gt = (dx, dy) => ({ x: MID + dx, y: MID + dy });
-const rect = (x0, y0, x1, y1) => ({ x0: MID + x0, y0: MID + y0, x1: MID + x1, y1: MID + y1 });
+const GLADE_LAYOUT_SCALE = (GLADE_HI - GLADE_LO + 1) / 13;
+const scaleGladeOffset = v => Math.round(v * GLADE_LAYOUT_SCALE);
+// Глэйд растёт расстояниями (тропы, река, места построек), а дома, двери, мебель и Башня — в человеческий рост
+const HOUSE_SCALE = 1;
+const gt = (dx, dy) => ({ x: MID + scaleGladeOffset(dx), y: MID + scaleGladeOffset(dy) });
+const rect = (x0, y0, x1, y1) => ({ x0: MID + scaleGladeOffset(x0), y0: MID + scaleGladeOffset(y0), x1: MID + scaleGladeOffset(x1), y1: MID + scaleGladeOffset(y1) });
 const inRect = (p, r, m = 0) => p.x >= r.x0 - m && p.x <= r.x1 + m && p.y >= r.y0 - m && p.y <= r.y1 + m;
 
 // Дома: прямоугольник в тайлах и сторона двери. Стены стоят чуть внутри прямоугольника.
 const HOUSES = [
-  { id: 'forge', name: 'Кузница', r: rect(-11, -11, -8, -9), door: 'E' },
-  { id: 'bunk1', name: 'Спальня', r: rect(-11, -7, -8, -6), door: 'E' },
-  { id: 'bunk2', name: 'Спальня', r: rect(-6, -7, -4, -6), door: 'S' },
-  { id: 'dining', name: 'Столовая', r: rect(-11, -4, -7, -2), door: 'E' },
-  { id: 'storage', name: 'Картохранилище', r: rect(1, 7, 3, 9), door: 'W' },
-  { id: 'blood', name: 'Живодерня', r: rect(6, 5, 8, 6), door: 'W' },
+  // blenderSize/doorOffset — размеры Blender-моделей домов в метрах (дома не растут вместе с Глэйдом).
+  { id: 'forge', name: 'Кузница', r: rect(-11, -11, -8, -9), door: 'E', blenderSize: [13, 9.5], blenderDoorOffset: 0 },
+  { id: 'bunk1', name: 'Спальня', r: rect(-11, -7, -8, -6), door: 'E', blenderSize: [13, 6], blenderDoorOffset: -1.75 },
+  { id: 'bunk2', name: 'Спальня', r: rect(-6, -7, -4, -6), door: 'S', blenderSize: [6, 9.5], blenderDoorOffset: 0 },
+  { id: 'dining', name: 'Столовая', r: rect(-11, -4, -7, -2), door: 'E', blenderSize: [16.5, 9.5], blenderDoorOffset: 0 },
+  { id: 'storage', name: 'Картохранилище', r: rect(1, 7, 3, 9), door: 'W', blenderSize: [9.5, 9.5], blenderDoorOffset: 0 },
+  { id: 'blood', name: 'Живодерня', r: rect(6, 5, 8, 6), door: 'W', blenderSize: [9.5, 6], blenderDoorOffset: 1.75 },
   // Новые — в конце списка: на номера первых шести ссылается остальной код
-  { id: 'pantry', name: 'Кладовая', r: rect(6, -3, 8, -2), door: 'W' },
-  { id: 'shed', name: 'Сарай', r: rect(10, -3, 11, -2), door: 'W' },
-  { id: 'medhut', name: 'Лазарет', r: rect(-11, 1, -9, 2), door: 'E' },
+  { id: 'pantry', name: 'Кладовая', r: rect(6, -3, 8, -2), door: 'W', blenderSize: [9.5, 6], blenderDoorOffset: 1.75 },
+  { id: 'shed', name: 'Сарай', r: rect(10, -3, 11, -2), door: 'W', blenderSize: [6, 6], blenderDoorOffset: 1.75 },
+  { id: 'medhut', name: 'Лазарет', r: rect(-11, 1, -9, 2), door: 'E', blenderSize: [9.5, 6], blenderDoorOffset: -1.75 },
 ];
+// Навигационный footprint — по габаритам модели дома; размер сетки округляется вверх,
+// чтобы жители не могли прокладывать путь сквозь стены.
+const HOUSE_TILE_METERS = 3.5;
+for (const h of HOUSES) {
+  const [baseW, baseD] = h.blenderSize;
+  const swap = h.door === 'S' || h.door === 'N';
+  const countX = Math.ceil((swap ? baseD : baseW) * HOUSE_SCALE / HOUSE_TILE_METERS);
+  const countY = Math.ceil((swap ? baseW : baseD) * HOUSE_SCALE / HOUSE_TILE_METERS);
+  const cx = (h.r.x0 + h.r.x1) / 2, cy = (h.r.y0 + h.r.y1) / 2;
+  h.r = {
+    x0: Math.round(cx - (countX - 1) / 2), x1: Math.round(cx - (countX - 1) / 2) + countX - 1,
+    y0: Math.round(cy - (countY - 1) / 2), y1: Math.round(cy - (countY - 1) / 2) + countY - 1,
+  };
+}
 const DOOR_DIR = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
 for (const h of HOUSES) {
   const r = h.r, [ox, oy] = DOOR_DIR[h.door];
-  const midX = r.x0 + Math.floor((r.x1 - r.x0 + 1) / 2), midY = r.y0 + Math.floor((r.y1 - r.y0 + 1) / 2);
-  h.doorTile = { x: ox > 0 ? r.x1 : ox < 0 ? r.x0 : midX, y: oy > 0 ? r.y1 : oy < 0 ? r.y0 : midY };
+  const midX = (r.x0 + r.x1) / 2, midY = (r.y0 + r.y1) / 2;
+  const off = h.blenderDoorOffset * HOUSE_SCALE / HOUSE_TILE_METERS;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const alongX = h.door === 'E' ? clamp(Math.round(midY - off), r.y0, r.y1)
+    : h.door === 'W' ? clamp(Math.round(midY + off), r.y0, r.y1)
+      : h.door === 'S' ? clamp(Math.round(midX + off), r.x0, r.x1)
+        : clamp(Math.round(midX - off), r.x0, r.x1);
+  h.doorTile = { x: ox ? (ox > 0 ? r.x1 : r.x0) : alongX, y: oy ? (oy > 0 ? r.y1 : r.y0) : alongX };
   h.doorOut = { x: h.doorTile.x + ox, y: h.doorTile.y + oy };
 }
 
@@ -108,6 +133,11 @@ LAYOUT.paths = [
   { w: 0.9, pts: [[0.6, 6.1], [2.8, 6.1], [4.0, 7.0]] },
 ];
 
+LAYOUT.river = LAYOUT.river.map(([x, y]) => [x * GLADE_LAYOUT_SCALE, y * GLADE_LAYOUT_SCALE]);
+for (const zones of [LAYOUT.hills, LAYOUT.hollows, LAYOUT.puddles, LAYOUT.mud]) {
+  for (const p of zones) { p.x *= GLADE_LAYOUT_SCALE; p.y *= GLADE_LAYOUT_SCALE; p.r *= GLADE_LAYOUT_SCALE; }
+}
+for (const path of LAYOUT.paths) path.pts = path.pts.map(([x, y]) => [x * GLADE_LAYOUT_SCALE, y * GLADE_LAYOUT_SCALE]);
 // Расстояние (в тайлах) от точки до края ближайшей тропы — чтобы деревья не росли посреди дороги
 function pathDistTiles(x, y) {
   let best = 1e9;
@@ -127,6 +157,10 @@ LAYOUT.signs = [
   { at: [-6.6, -0.65], to: [['Столовая', -6, -3], ['Спальни', -6, -6], ['Кузница', -7, -10], ['Кладбище', -6, 4]] },
   { at: [-5.9, 6.7], to: [['Брод', -7, 11], ['Лазарет', -8, 2]] },
 ];
+for (const sign of LAYOUT.signs) {
+  sign.at = sign.at.map(v => v * GLADE_LAYOUT_SCALE);
+  sign.to = sign.to.map(([name, x, y]) => [name, x * GLADE_LAYOUT_SCALE, y * GLADE_LAYOUT_SCALE]);
+}
 
 // Расстояние от точки (в тайлах) до оси реки, тоже в тайлах
 function riverDistTiles(x, y) {
@@ -145,15 +179,15 @@ const FOREST_CLEAR = [
 ];
 const forestFree = (p, m = 0) => !FOREST_CLEAR.some(([r, k]) => inRect(p, r, k + m)) && riverDistTiles(p.x, p.y) > 0.85 &&
   pathDistTiles(p.x, p.y) > 0.35 + m && Math.hypot(p.x - LAYOUT.ford.x, p.y - LAYOUT.ford.y) > 1.8 && Math.hypot(p.x - LAYOUT.log.x, p.y - LAYOUT.log.y) > 1.6;
-for (let dy = 2; dy <= 12; dy += 2) {
-  for (let dx = -12; dx <= 12; dx += 2) {
+for (let dy = 1; dy <= 12; dy++) {
+  for (let dx = -12; dx <= 12; dx++) {
     const p = gt(dx, dy);
     if (dx !== 0 && forestFree(p)) LAYOUT.trees.push(p);
   }
 }
 for (let dy = 1; dy <= 11; dy++) {
   for (let dx = -12; dx <= 11; dx++) {
-    const p = { x: MID + dx + 0.5 + (thash(dx, dy) - 0.5) * 0.3, y: MID + dy + 0.5 + (thash(dy, dx) - 0.5) * 0.3 };
+    const p = { x: MID + (dx + 0.5) * GLADE_LAYOUT_SCALE + (thash(dx, dy) - 0.5) * 0.3, y: MID + (dy + 0.5) * GLADE_LAYOUT_SCALE + (thash(dy, dx) - 0.5) * 0.3 };
     if (Math.abs(p.x - MID) < 1.1 || thash(dx * 7, dy * 3) > 0.62 || !forestFree(p, 0.2)) continue;
     LAYOUT.cornerTrees.push(p);
   }
@@ -196,11 +230,18 @@ const STATIONS = {
 // точное место кровати (wx, wy в тайлах) и поворот (кровать длинной стороной вдоль X)
 const BEDS = [];
 for (const h of HOUSES.filter(h => h.id.startsWith('bunk'))) {
+  const swap = h.door === 'S' || h.door === 'N';
+  const roomW = (swap ? h.blenderSize[1] : h.blenderSize[0]) * HOUSE_SCALE;
+  const centerX = (h.r.x0 + h.r.x1) / 2;
+  const bedHalfLength = 2.05 / 2, wallInset = 0.32 * HOUSE_SCALE;
+  const maxBedOffset = Math.max(0, roomW / 2 - wallInset - bedHalfLength) / HOUSE_TILE_METERS;
   for (let x = h.r.x0; x <= h.r.x1; x++) {
     for (const y of [h.r.y0, h.r.y1]) {
       if (x === h.doorTile.x && y === h.doorTile.y) continue;
-      const wallSide = y === h.r.y0 ? -1 : 1;
-      BEDS.push({ x, y, wx: x, wy: y + wallSide * 0.19, yaw: 0, house: h.id });
+      // Кровати вдоль стен; крайние места сдвигаются внутрь по реальному Blender-габариту.
+      const inward = y === h.r.y0 ? 1 : -1;
+      const wx = Math.max(centerX - maxBedOffset, Math.min(centerX + maxBedOffset, x));
+      BEDS.push({ x, y, wx, wy: y + inward * 0.19, yaw: 0, house: h.id });
     }
   }
 }

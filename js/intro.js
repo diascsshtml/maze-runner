@@ -11,23 +11,26 @@ const LIFT_FLY = 18.8;                    // камера вылетает из 
 const Lift = { active: false, t: 0, dur: 33.2, fade: 1, light: 1, cageY: LIFT_FLOOR - LIFT_DEPTH, doors: 0, doorDir: 0,
   shaft: null, cage: null, lamps: [], skipEl: null, done: null, out: false };
 
-// Где Томас встаёт после облёта: в тайлах к югу от Ящика, взгляд на Башню (и на сумку у края Ящика)
-const LIFT_EXIT = { dy: 0.9, yaw: -1.18, pitch: 0.08 };
-const LIFT_EXIT_LOOK = [Math.cos(LIFT_EXIT.yaw) * Math.cos(LIFT_EXIT.pitch) * 4, 1.68 + Math.sin(LIFT_EXIT.pitch) * 4,
+// Где Томас встаёт после облёта: в тайлах к югу от Ящика, лицом к Башне (и к сумке у края Ящика)
+const LIFT_TOWER = [tw(LAYOUT.tower.x - MID), tw(LAYOUT.tower.y - MID)];      // Башня в метрах от Ящика
+const LIFT_EXIT = { dx: -0.5, dy: 0.8, pitch: 0.08 };            // чуть левее середины — подальше от рощи на юго-востоке
+LIFT_EXIT.yaw = Math.atan2(LIFT_TOWER[1] - tw(LIFT_EXIT.dy), LIFT_TOWER[0] - tw(LIFT_EXIT.dx));
+const LIFT_EXIT_LOOK = [tw(LIFT_EXIT.dx) + Math.cos(LIFT_EXIT.yaw) * Math.cos(LIFT_EXIT.pitch) * 4, 1.68 + Math.sin(LIFT_EXIT.pitch) * 4,
   tw(LIFT_EXIT.dy) + Math.sin(LIFT_EXIT.yaw) * Math.cos(LIFT_EXIT.pitch) * 4];
 // Облёт: время и точки камеры в метрах от центра Ящика (y — от нуля). Первая — где стоит Томас в клетке,
-// последняя — его глаза у Ящика (как встаёт finishLift)
+// последняя — его глаза у Ящика (как встаёт finishLift). Дуга растёт вместе с Глэйдом (F — его масштаб)
+const FLY_F = GLADE_LAYOUT_SCALE, FLY_H = 1 + (FLY_F - 1) * 0.4;
 const FLY_KEYS = [
   { t: LIFT_FLY, p: [0, LIFT_FLOOR + 1.67, 0], l: [0, LIFT_FLOOR + 1.67 + 3.25, -2.33] },
   // Вылет лицом к Башне, отход назад и вверх, дуга по западу и северу над стеной, спуск сверху к Ящику.
-  // Путь проверен на зазор с кронами и Башней: юго-восток у Ящика — роща, туда камера не летит
-  { t: 20.6, p: [-0.3, 3.5, -0.4], l: [5, 8, -13] },
-  { t: 22.6, p: [-4, 12, 4], l: [6, 9, -14] },
-  { t: 25.0, p: [-24, 36, 4], l: [0, 2, -6] },
-  { t: 27.4, p: [-36, 46, -24], l: [0, 0, -2] },
-  { t: 29.6, p: [-20, 50, -44], l: [0, 0, 4] },
-  { t: 31.5, p: [-3.5, 17, -0.5], l: [1, 0, -3] },
-  { t: 33.2, p: [0, 1.68, tw(LIFT_EXIT.dy)], l: LIFT_EXIT_LOOK, ground: true },
+  // Путь проверен на зазор с кронами и Башней (fly-clear): юго-восток у Ящика — роща, туда камера не летит
+  { t: 20.6, p: [-0.3, 3.5, -0.4], l: [LIFT_TOWER[0] * 0.7, 8, LIFT_TOWER[1] * 0.9] },
+  { t: 22.6, p: [-4 * FLY_F, 12, 4 * FLY_F], l: [LIFT_TOWER[0], 9, LIFT_TOWER[1]] },
+  { t: 25.0, p: [-24 * FLY_F, 36 * FLY_H, 4 * FLY_F], l: [0, 2, -6 * FLY_F] },
+  { t: 27.4, p: [-36 * FLY_F, 46 * FLY_H, -24 * FLY_F], l: [0, 0, -2 * FLY_F] },
+  { t: 29.6, p: [-20 * FLY_F, 50 * FLY_H, -44 * FLY_F], l: [0, 0, 4 * FLY_F] },
+  { t: 31.5, p: [-5, 14, -1], l: [1, 0, -3] },
+  { t: 33.2, p: [tw(LIFT_EXIT.dx), 1.68, tw(LIFT_EXIT.dy)], l: LIFT_EXIT_LOOK, ground: true },
 ];
 // Подписи на облёте
 const FLY_CAPTIONS = [
@@ -317,7 +320,7 @@ function finishLift() {
   Sound.stopLift();
   // Томас выбрался из Ящика и стоит к югу от него лицом к Башне — там, куда опустилась камера облёта
   const p = Game.player, ex = LIFT_EXIT;
-  Object.assign(p, { x: MID, y: MID + ex.dy, h: groundH(tw(MID), tw(MID + ex.dy)), vh: 0, yaw: ex.yaw, pitch: ex.pitch });
+  Object.assign(p, { x: MID + ex.dx, y: MID + ex.dy, h: groundH(tw(MID + ex.dx), tw(MID + ex.dy)), vh: 0, yaw: ex.yaw, pitch: ex.pitch });
   Game.shake = 0;
   L.out = true;
   if (L.done) L.done();

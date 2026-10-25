@@ -19,9 +19,9 @@ function pole(x, z, h, r = 0.13, y0 = null) {
 /* ---------- дома ---------- */
 
 function houseWalls(h, I) {
-  const t = 0.32, y0 = I.y, y1 = I.y + 3.2;
-  const x0 = I.cx - I.w / 2, x1 = I.cx + I.w / 2, z0 = I.cz - I.d / 2, z1 = I.cz + I.d / 2;
-  const door = { x: tw(h.doorTile.x), z: tw(h.doorTile.y) }, half = 0.7;
+  const t = 0.32 * I.scale, y0 = I.y, y1 = I.y + 3.2 * I.scale;
+  const x0 = I.cx - I.outerW / 2, x1 = I.cx + I.outerW / 2, z0 = I.cz - I.outerD / 2, z1 = I.cz + I.outerD / 2;
+  const door = I.door, half = I.doorW / 2;
   const wallX = (x, za, zb, gap) => {
     if (gap) {
       addBox(x, (za + door.z - half) / 2, t, door.z - half - za, y0, y1);
@@ -45,17 +45,94 @@ function lantern(x, y, z) {
   GLADE3D.lanterns.push({ x, y: y + 0.2, z });
 }
 
+// Двери домов: закрыты; распахиваются внутрь, когда к проёму подходит Томас или житель, и закрываются за ним
+const HOUSE_DOORS = [];
+const DOOR_OPEN = 1.4, DOOR_NEAR = 3.4, DOOR_FAR = 4.0;   // угол распахнутой двери, радиусы «подошёл» и «отошёл», м
+
+function addHouseDoor(h, m) {
+  const door = m && m.getObjectByName('door');
+  if (!door) return;
+  m.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(door), c = box.getCenter(new THREE.Vector3());
+  const collider = {
+    round: false, x0: box.min.x, x1: box.max.x, z0: box.min.z, z1: box.max.z,
+    y0: box.min.y, y1: box.max.y, struct: CUR_STRUCT, door: true,
+  };
+  COLLIDERS.push(collider);
+  HOUSE_DOORS.push({ id: h.id, node: door, collider, x: c.x, y: c.y, z: c.z, k: 0, want: 0, hold: 0 });
+}
+
+// Насколько дверь может открыться: до первого предмета обстановки на пути полотна (как в жизни — упирается в сундук)
+function doorSwingLimit(D) {
+  const fl = HOUSE_INFO[D.id].floor, v = new THREE.Vector3(), solid = COLLIDERS.filter(c => !c.round && !c.door && c.y1 - c.y0 < 2.5 && c.y1 > fl + 0.05 && c.y0 < fl + 2.2);
+  for (let a = DOOR_OPEN; a > 0.35; a -= 0.05) {
+    D.node.rotation.y = a;
+    D.node.updateMatrixWorld(true);
+    let hit = false;
+    D.node.traverse(o => {
+      if (hit || !o.isMesh) return;
+      const pos = o.geometry.attributes.position;
+      for (let i = 0; i < pos.count && !hit; i += 3) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+        hit = solid.some(c => v.x > c.x0 && v.x < c.x1 && v.z > c.z0 && v.z < c.z1 && v.y > c.y0 && v.y < c.y1);
+      }
+    });
+    if (!hit) return a;
+  }
+  return 0.35;
+}
+
+function updateHouseDoors(dt) {
+  if (!dt) return;
+  const p = Game.player;
+  for (const D of HOUSE_DOORS) {
+    if (!isBuilt(D.id)) continue;
+    if (D.max === undefined) D.max = doorSwingLimit(D);
+    const dist = (x, y) => Math.hypot(tw(x) - D.x, tw(y) - D.z);
+    let near = 1e9;
+    if (p && Game.state !== 'title') near = dist(p.x, p.y);
+    for (const n of Game.npcs) if (n.act !== 'sleep') near = Math.min(near, dist(n.x, n.y));
+    // Подошёл — открыть; закрыть, только когда все отошли подальше и чуть погодя
+    if (near < DOOR_NEAR) { D.hold = 0.9; if (!D.want) { D.want = 1; Sound.door(true, D); } }
+    else if (near > DOOR_FAR && D.want && (D.hold -= dt) <= 0) D.want = 0;
+    const was = D.k;
+    D.k = D.want ? Math.min(1, D.k + dt / 0.45) : Math.max(0, D.k - dt / 0.8);
+    // Пока дверь закрыта или только приоткрыта, полотно остаётся препятствием.
+    // Снимаем коллизию, когда поворот оставляет проход шире персонажа.
+    if (D.collider) D.collider.off = D.k * D.max >= 0.95;
+    if (was > 0 && D.k === 0) Sound.door(false, D);
+    D.node.rotation.y = D.k * D.k * (3 - 2 * D.k) * D.max;     // плавно трогается и плавно доходит
+  }
+}
+
 function buildHouses() {
-  const INSET = 0.5;
+  const WALL_INSET = 0.32;
   for (const h of HOUSES) withStruct(h.id, () => {
-    const R = rectWorld(h.r), y = groundH(R.x, R.z);
-    const I = HOUSE_INFO[h.id] = { cx: R.x, cz: R.z, y, w: R.w - INSET * 2, d: R.d - INSET * 2, floor: y + 0.3 };
-    if (!put('house_' + h.id, R.x, y, R.z, DOOR_ROT[h.door])) {
-      const walls = mesh(boxGeo(I.w, 2.9, I.d), GM.woodDark, R.x, y + 1.45, R.z);
+    const R = rectWorld(h.r), y = groundH(R.x, R.z), scale = HOUSE_SCALE;
+    const swap = h.door === 'S' || h.door === 'N';
+    const outerW = (swap ? h.blenderSize[1] : h.blenderSize[0]) * scale;
+    const outerD = (swap ? h.blenderSize[0] : h.blenderSize[1]) * scale;
+    const doorOffset = h.blenderDoorOffset * scale;
+    const door = h.door === 'E' ? { x: R.x + outerW / 2, z: R.z - doorOffset }
+      : h.door === 'W' ? { x: R.x - outerW / 2, z: R.z + doorOffset }
+        : h.door === 'S' ? { x: R.x + doorOffset, z: R.z + outerD / 2 }
+          : { x: R.x - doorOffset, z: R.z - outerD / 2 };
+    // Blender-модель, физические стены и маршрутный footprint используют одну базовую геометрию.
+    // Внутренняя мебель отступает от стен; платформа повторяет пол модели, а не старый размер клеток.
+    const I = HOUSE_INFO[h.id] = {
+      cx: R.x, cz: R.z, y, scale, outerW, outerD,
+      w: Math.max(1, outerW - WALL_INSET * 2), d: Math.max(1, outerD - WALL_INSET * 2),
+      door, doorW: 1.3 * scale,
+      floor: y + 0.3 * scale,
+    };
+    const model = put('house_' + h.id, R.x, y, R.z, DOOR_ROT[h.door], scale);
+    addHouseDoor(h, model);
+    if (!model) {
+      const walls = mesh(boxGeo(I.outerW, 2.9 * scale, I.outerD), GM.woodDark, R.x, y + 1.45 * scale, R.z);
       walls.material = GM.woodDark;
-      mesh(new THREE.ConeGeometry(Math.hypot(I.w, I.d) / 2 + 0.6, 2.4, 4), GM.thatch, R.x, y + 4.1, R.z).rotation.y = Math.PI / 4;
+      mesh(new THREE.ConeGeometry(Math.hypot(I.outerW, I.outerD) / 2 + 0.6 * scale, 2.4 * scale, 4), GM.thatch, R.x, y + 4.1 * scale, R.z).rotation.y = Math.PI / 4;
     }
-    addPlatform({ x0: R.x - I.w / 2, x1: R.x + I.w / 2, z0: R.z - I.d / 2, z1: R.z + I.d / 2, h: I.floor });
+    addPlatform({ x0: R.x - I.outerW / 2, x1: R.x + I.outerW / 2, z0: R.z - I.outerD / 2, z1: R.z + I.outerD / 2, h: I.floor });
     houseWalls(h, I);
     furnish(h, I);
   });
@@ -152,7 +229,8 @@ function furnish(h, I) {
     addBox(west + 1.6, north + 0.2, 1.25, 0.4, fl, fl + 1.6);
     furniture('sacks', I.cx - 0.6, south - 0.9, I, 0.3, 1.4, 1.2, 1.0);
     furniture('sacks', I.cx + 1.1, south - 0.9, I, 1.5, 1.4, 1.2, 1.0);
-    for (const [dx, dz] of [[0.6, 0.6], [1.35, 0.55], [0.95, 1.25]]) furniture('barrel', west + dx, south - dz, I, 0, 0.7, 0.7, 1.0);
+    // Бочки — в северо-западном углу: у южного угла они загораживали вход и не давали открыться двери
+    for (const [dx, dz] of [[0.55, 0.55], [0.55, 1.3], [1.25, 1.05]]) furniture('barrel', west + dx, north + dz, I, 0, 0.7, 0.7, 1.0);
     put('basket', I.cx, fl, I.cz - 0.3, 0.4);
     put('basket', I.cx + 0.6, fl, I.cz + 0.2, 1.9);
     lantern(I.cx, fl + 2.1, I.cz);

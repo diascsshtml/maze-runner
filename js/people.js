@@ -193,7 +193,10 @@ function syncNpcs(t, dt) {
     }
     const d = Math.hypot(n.x - p.x, n.y - p.y) * S;
     m.label.visible = d < 14 && n.act !== 'sleep';
-    m.node.visible = d < 170;
+    m.node.visible = d < World.npcDist;                 // дальность — от ступени качества
+    // Дальние жители дешевле: дальше 30 м без тени, дальше 60 м без мелочей лица и с анимацией через кадр
+    const band = d < 30 ? 0 : d < 60 ? 1 : 2;
+    if (m.band !== band && !m.procedural) npcDetail(m, band);
     let x = tw(n.x), z = tw(n.y), y = npcY(n), face = n.face;
     // У колоды, поленницы и стройки житель подходит к самому предмету (клетка пути — в нескольких метрах)
     const reach = m.procedural ? 0 : workReach(n);
@@ -215,7 +218,7 @@ function syncNpcs(t, dt) {
       const b = n.goal.bed;
       x = tw(b.wx) + 0.88;
       z = tw(b.wy);
-      y = supportH(tw(b.wx), tw(b.wy), y + 0.5) + 0.62;
+      y = supportH(tw(b.wx), tw(b.wy), y + 0.5) + 0.58;
       m.node.rotation.order = 'YXZ';
       m.node.rotation.set(-Math.PI / 2, Math.PI / 2, 0);
     } else if (n.act === 'sit') {
@@ -224,7 +227,7 @@ function syncNpcs(t, dt) {
       const dx = x - fx, dz = z - fz, dist = Math.hypot(dx, dz) || 1, r = dist < 5.4 ? 4.0 : 6.4;
       x = fx + dx / dist * r;
       z = fz + dz / dist * r;
-      y = groundH(x, z) + 0.02;
+      y = groundH(x, z) + 0.42;
       face = Math.atan2(-dz, -dx);
     }
     n.wy = y;
@@ -248,7 +251,9 @@ function syncNpcs(t, dt) {
     if (m.headRest) m.bones.head.quaternion.copy(m.headRest);
     playAct(m, act, speed);
     if (limp) m.node.rotation.z = Math.sin(n.t * 4.5) * 0.09 + 0.05;
-    m.mixer.update(dt);
+    // Невидимого не анимируем; далёкого — через кадр (время копится, шаг не сбивается)
+    m.mixAcc = Math.min(1, (m.mixAcc || 0) + dt);
+    if (m.node.visible && (band < 2 || (m.skip = !m.skip))) { m.mixer.update(m.mixAcc); m.mixAcc = 0; }
     workSounds(m, act, d, x, y, z);
     if (m.headRest && n.act !== 'sleep') m.bones.head.rotateY(n.lookYaw * 0.6);
     if (m.tool) {
@@ -256,6 +261,21 @@ function syncNpcs(t, dt) {
       placeTool(m, n.tool);
     }
     if (m.bundle) m.bundle.visible = act === 'carry';
+  }
+}
+
+// Детали жителя по расстоянию: 0 — всё с тенью, 1 — без тени, 2 — ещё и без глаз, бровей и ресниц.
+// Мелочи лица тень не отбрасывают никогда; спрятанные варианты причёсок остаются спрятанными
+const FACE_BITS = ['eyes', 'brows', 'lashes'];
+function npcDetail(m, band) {
+  m.band = band;
+  if (!m.parts) {
+    m.parts = [];
+    m.node.traverse(o => { if (o.isMesh) m.parts.push({ o, shown: o.visible, face: FACE_BITS.includes(o.name) }); });
+  }
+  for (const p of m.parts) {
+    p.o.castShadow = band === 0 && !p.face;
+    if (p.face) p.o.visible = p.shown && band < 2;
   }
 }
 

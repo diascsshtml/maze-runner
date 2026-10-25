@@ -196,6 +196,14 @@ function initPostFX(renderer, { msaa = 4, bloom = true } = {}) {
   });
 }
 
+// Сглаживание меняется на ходу (ступени качества): буфер кадра пересоздаётся с другим числом выборок
+function setPostMSAA(samples) {
+  const old = PostFX.rtScene;
+  if (old.samples === samples) return;
+  PostFX.rtScene = new THREE.WebGLRenderTarget(old.width, old.height, { type: THREE.HalfFloatType, samples });
+  old.dispose();
+}
+
 function resizePostFX(w, h) {
   PostFX.w = w;
   PostFX.h = h;

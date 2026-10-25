@@ -60,7 +60,36 @@ async function loadModel(id, base = 'assets/models') {
   const bin = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) bin[i] = raw.charCodeAt(i);
   delete json.extras.bin;
-  return new Promise((ok, fail) => new THREE.GLTFLoader().parse(makeGlb(json, bin), `${base}/${id}/`, ok, fail));
+  return new Promise((ok, fail) => new THREE.GLTFLoader().parse(makeGlb(json, bin), `${base}/${id}/`, g => { shareSources(g, `${base}/${id}/`); ok(g); }, fail));
+}
+
+// Одна картинка — одна копия. Каждая модель из Blender грузит свои «доски», «кору», «верёвку» заново
+// (у загрузчика glTF кэш на один файл), и в видеопамяти их набиралось по 40–60 одинаковых.
+// По адресу файла подставляем уже загруженную картинку; лишнюю освобождаем
+const SHARED_SOURCES = new Map();
+function shareSources(g, base) {
+  const json = g.parser && g.parser.json, assoc = g.parser && g.parser.associations;
+  if (!json || !json.images || !assoc) return;
+  const uriOf = new Map();
+  for (const [obj, a] of assoc) {
+    if (!obj || !obj.isTexture || !a || a.textures === undefined) continue;
+    const img = json.images[json.textures[a.textures].source];
+    if (img && img.uri) uriOf.set(obj.source, new URL(img.uri, new URL(base, location.href)).href);
+  }
+  const old = new Set();
+  g.scene.traverse(o => {
+    if (!o.material) return;
+    for (const m of [].concat(o.material)) {
+      for (const k of Object.keys(m)) {
+        const t = m[k];
+        if (!t || !t.isTexture || !uriOf.has(t.source)) continue;
+        const uri = uriOf.get(t.source), shared = SHARED_SOURCES.get(uri);
+        if (!shared) SHARED_SOURCES.set(uri, t.source);
+        else if (shared !== t.source) { old.add(t.source); t.source = shared; t.needsUpdate = true; }
+      }
+    }
+  });
+  for (const s of old) if (s.data && s.data.close) s.data.close();
 }
 
 function loadAssets(onProgress) {

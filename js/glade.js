@@ -2,7 +2,7 @@
 // Модели из Blender (assets/blender) ставятся копиями; если их нет — рисуем запасной вариант.
 
 const WIND = { uTime: { value: 0 }, uGust: { value: 1 } };   // uGust — сила порыва (её же слышно в звуке ветра)
-const GLADE3D = { fires: [], torches: [], lanterns: [], water: null };
+const GLADE3D = { fires: [], torches: [], lanterns: [], water: null, grassSets: [] };   // grassSets — трава, её густоту меняют ступени качества
 const tw = t => t * S;                                  // тайл → метры
 // Насколько протоптаны тропы и вспахан огород: в новом поселении тропы едва заметны и проступают, когда Глэйд обживается
 // hole — створки Ящика открыты: земля над шахтой не рисуется, сквозь проём видно клетку
@@ -238,7 +238,7 @@ function buildGladeGround(quality) {
   'roughnessFactor = mix(roughnessFactor, 0.32, max(smoothstep(0.3, 0.9, mud) * 0.85, bed * 0.6));',
   { uniforms: { dirtMap: { value: dirtMap }, soilMap: { value: soilMap }, pathMap: { value: pathMap }, groundMask: { value: maskTex }, uTread: GROUND_LIFE.tread, uTilled: GROUND_LIFE.tilled, uBoxHole: GROUND_LIFE.hole },
     decl: 'uniform sampler2D dirtMap;\nuniform sampler2D soilMap;\nuniform sampler2D pathMap;\nuniform sampler2D groundMask;\nuniform float uTread;\nuniform float uTilled;\nuniform float uBoxHole;\n' });
-  const seg = { high: 260, medium: 180, low: 120 }[quality];
+  const seg = Math.round(({ high: 260, medium: 180, low: 120 }[quality]) * GLADE_LAYOUT_SCALE);
   const geo = new THREE.PlaneGeometry(span, span, seg, seg);
   geo.rotateX(-Math.PI / 2);
   const p = geo.attributes.position;
@@ -267,7 +267,7 @@ function buildGladeGround(quality) {
     return n;
   };
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), col = new THREE.Color(), v3 = new THREE.Vector3(), sc = new THREE.Vector3();
-  const count = { high: 20000, medium: 11000, low: 4000 }[quality];
+  const count = Math.round(({ high: 20000, medium: 11000, low: 4000 }[quality]) * GLADE_LAYOUT_SCALE * GLADE_LAYOUT_SCALE);
   const grass = new THREE.InstancedMesh(grassClumpGeometry(8, 0.27), grassMaterial(), count);
   grass.receiveShadow = true;
   grass.frustumCulled = false;
@@ -279,6 +279,7 @@ function buildGladeGround(quality) {
     grass.setColorAt(n, col.setRGB(v * (0.9 + Math.random() * 0.15 + dry), v * (1 - dry * 0.2), v * (0.75 - dry)));
   });
   World.scene.add(grass);
+  GLADE3D.grassSets.push({ im: grass, full: grass.count });
 
   // Настоящие пучки травы из фотоскана
   const clumps = modelMeshes('grass_medium_01').sort((a, b) => a.geometry.index.count - b.geometry.index.count).slice(0, 3);
@@ -294,6 +295,7 @@ function buildGladeGround(quality) {
       im.setMatrixAt(n, m4);
     });
     World.scene.add(im);
+    GLADE3D.grassSets.push({ im, full: im.count });
   }
 }
 
@@ -491,7 +493,9 @@ function buildRiver() {
   {
     const L = LAYOUT.log, r = riverQuery(tw(L.x), tw(L.y)), c = riverAt(r.s), nx = -c.tz, nz = c.tx;
     const ends = [-3.2, 3.3].map(o => groundH(c.x + nx * o, c.z + nz * o));
-    const y = (ends[0] + ends[1]) / 2 - 0.35, rot = -Math.atan2(nz, nx);
+    // Верх ствола (около 0.84 м над origin модели) должен лечь почти на уровень берегов,
+    // а не висеть высоко над водой. Оставляем небольшой просвет для реки под бревном.
+    const y = (ends[0] + ends[1]) / 2 - 0.72, rot = -Math.atan2(nz, nx);
     if (put('log_fallen', c.x, y, c.z, rot)) {
       for (let o = -3.4; o <= 3.6; o += 0.45) {
         const top = y + 0.84 - (o + 3.6) / 7.3 * 0.2, x = c.x + nx * o, z = c.z + nz * o;

@@ -179,15 +179,20 @@ function renderSettings() {
     const seg = document.createElement('div');
     seg.className = 'seg';
     const chosen = loadQuality();
-    for (const [q, name] of [['low', 'Низкое'], ['medium', 'Среднее'], ['high', 'Высокое']]) {
+    for (const [q, name] of [['auto', 'Авто'], ['low', 'Низкое'], ['medium', 'Среднее'], ['high', 'Высокое']]) {
       const b = document.createElement('button');
       b.type = 'button';
       b.textContent = name;
       b.className = q === chosen ? 'on' : '';
-      b.addEventListener('click', () => { try { localStorage.setItem('maze-runner-quality', q); } catch (e) { /* без сохранения */ } renderSettings(); });
+      b.addEventListener('click', () => {
+        try { localStorage.setItem('maze-runner-quality', q); } catch (e) { /* без сохранения */ }
+        // Облегчённый мир (низкое) или полный строятся при запуске; между остальными переходим сразу
+        if ((q === 'low') === (World.quality === 'low')) setQuality(q);
+        renderSettings();
+      });
       seg.appendChild(b);
     }
-    row('Качество графики', 'Тени, трава, сглаживание. Меняется после перезапуска', seg);
+    row('Качество графики', 'Авто само держит плавность: тени, трава, чёткость, сглаживание. Сейчас: ступень ' + (TIERS.length - World.tier) + ' из ' + TIERS.length, seg);
     if (chosen !== World.quality) {
       const restart = document.createElement('button');
       restart.type = 'button';

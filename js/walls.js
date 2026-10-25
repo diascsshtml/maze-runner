@@ -257,11 +257,19 @@ function isOpen(x, y) { return !isSolid(Maze.at(x, y)); }
 function rebuildIvy() {
   const mesh = Walls.ivy, cap = mesh.instanceMatrix.count;
   let n = 0;
-  for (let y = 0; y < SIZE && n < cap; y++) {
-    for (let x = 0; x < SIZE && n < cap; x++) {
-      const i = y * SIZE + x;
-      if (Maze.tiles[i] === T.IVY) { n = ivyCurtain(mesh, n, cap, x, y); continue; }
-      if (!isSolid(Maze.tiles[i]) || Walls.h[i] < 1) continue;
+  // Сначала перемешиваем стены стабильным пространственным хешем. Иначе лимит
+  // InstancedMesh заполняется сверху вниз и оставляет дальнюю часть карты голой.
+  const candidates = [];
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
+    const i = y * SIZE + x;
+    if (Maze.tiles[i] === T.IVY || (isSolid(Maze.tiles[i]) && Walls.h[i] >= 1)) {
+      candidates.push({ x, y, order: hash3(x, y, 701) });
+    }
+  }
+  candidates.sort((a, b) => a.order - b.order || a.y - b.y || a.x - b.x);
+  for (const { x, y } of candidates) {
+      if (n >= cap) break;
+      if (Maze.at(x, y) === T.IVY) { n = ivyCurtain(mesh, n, cap, x, y); continue; }
       const sec = sectorOfTile(x, y), ic = IVY_C[sec];
       DIRS.forEach((d, f) => {
         if (n >= cap || !isOpen(x + d.x, y + d.y)) return;
@@ -310,7 +318,6 @@ function rebuildIvy() {
           }
         }
       });
-    }
   }
   mesh.count = n;
   mesh.instanceMatrix.needsUpdate = true;
@@ -346,9 +353,15 @@ function ivyCurtain(mesh, n, cap, x, y) {
 function rebuildDebris() {
   let nr = 0, nt = 0;
   const capR = Walls.rocks.instanceMatrix.count, capT = Walls.tufts.instanceMatrix.count;
-  for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-      if (Maze.at(x, y) !== T.FLOOR) continue;
+  // Декор тоже обходим в стабильном псевдослучайном порядке: при заполнении
+  // буфера детали равномерно покрывают карту, а не обрываются в нижних рядах.
+  const floors = [];
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
+    if (Maze.at(x, y) === T.FLOOR) floors.push({ x, y, order: hash3(x, y, 702) });
+  }
+  floors.sort((a, b) => a.order - b.order || a.y - b.y || a.x - b.x);
+  for (const { x, y } of floors) {
+      if (nr >= capR && nt >= capT) break;
       const sec = sectorOfTile(x, y);
       DIRS.forEach((d, f) => {
         if (Maze.at(x + d.x, y + d.y) !== T.WALL) return;
@@ -377,7 +390,6 @@ function rebuildDebris() {
           Walls.tufts.setColorAt(nt++, _col);
         }
       });
-    }
   }
   Walls.rocks.count = nr;
   Walls.tufts.count = nt;

@@ -624,15 +624,17 @@ function showBest() {
   $('best').textContent = b.days ? `Рекорд: ${b.days} дн. в Лабиринте, побегов: ${b.wins}` : '';
 }
 
-const QUALITY_NAMES = { high: 'высокая', medium: 'средняя', low: 'низкая' };
+const QUALITY_NAMES = { auto: 'авто', high: 'высокая', medium: 'средняя', low: 'низкая' };
 function showQuality() {
   for (const b of document.querySelectorAll('.btn-quality')) b.textContent = `Графика: ${QUALITY_NAMES[World.quality]}`;
 }
 function cycleQuality() {
-  const order = ['high', 'medium', 'low'];
+  const order = ['auto', 'high', 'medium', 'low'];
   const next = order[(order.indexOf(World.quality) + 1) % order.length];
   try { localStorage.setItem('maze-runner-quality', next); } catch (e) { /* без сохранения */ }
-  location.reload();
+  // Облегчённый мир (низкое) строится при запуске — туда и обратно через перезапуск, остальное сразу
+  if ((next === 'low') !== (World.quality === 'low')) location.reload();
+  else { setQuality(next); showQuality(); }
 }
 
 // E: проснуться, отпустить лестницу, подобрать предмет, залезть по лестнице или лечь спать — что уместно рядом

@@ -1,16 +1,30 @@
 // 3D-мир: рендерер, свет и время суток, существа, атмосферные эффекты, камера от первого лица.
 // Координаты логики — тайлы; в 3D тайл (x, y) стоит в точке (x·S, 0, y·S).
 
+// Что закладывается при запуске (сколько травы и плюща, предел чёткости). «Авто», высокое и среднее строят
+// полный мир, а дальше всё решают ступени ниже; низкое — облегчённый мир для телефонов и слабых машин
 const QUALITY = {
+  auto: { pr: 1.5, msaa: 4, shadow: 4096, density: 1, bloom: true, flashShadow: true },
   high: { pr: 1.5, msaa: 4, shadow: 4096, density: 1, bloom: true, flashShadow: true },
-  medium: { pr: 1.0, msaa: 2, shadow: 2048, density: 0.6, bloom: true, flashShadow: false },
-  low: { pr: 0.75, msaa: 0, shadow: 1024, density: 0.3, bloom: false, flashShadow: false },
+  medium: { pr: 1.5, msaa: 4, shadow: 4096, density: 1, bloom: true, flashShadow: true },
+  low: { pr: 1.0, msaa: 0, shadow: 1024, density: 0.3, bloom: false, flashShadow: false },
 };
+// Ступени качества меняются на ходу, без перезапуска: чёткость, сглаживание, тени (размер карты и как часто
+// её перерисовывать), трава, на каком расстоянии видно жителей, свечение
+const TIERS = [
+  { scale: 1, msaa: 4, shadow: 4096, shadowEvery: 1, grass: 1, npc: 140, bloom: true },
+  { scale: 0.9, msaa: 4, shadow: 2048, shadowEvery: 1, grass: 0.85, npc: 120, bloom: true },
+  { scale: 0.8, msaa: 2, shadow: 2048, shadowEvery: 2, grass: 0.7, npc: 100, bloom: true },
+  { scale: 0.7, msaa: 0, shadow: 1024, shadowEvery: 2, grass: 0.5, npc: 80, bloom: true },
+  { scale: 0.6, msaa: 0, shadow: 1024, shadowEvery: 3, grass: 0.35, npc: 65, bloom: false },
+  { scale: 0.5, msaa: 0, shadow: 1024, shadowEvery: 4, grass: 0.25, npc: 50, bloom: false },
+];
+const QUALITY_TIER = { high: 0, medium: 2, low: 4 };
 
 const World = {
   items: new Map(), grievers: new Map(), npcs: new Map(),
-  exitBeacon: null, fov: 72, scale: 1, frameTimes: [], envT: 0, envDark: -1, quality: 'high',
-  mazeK: 0, gust: 0, morning: 0,
+  exitBeacon: null, fov: 72, scale: 1, frameTimes: [], envT: 0, envDark: -1, quality: 'auto',
+  mazeK: 0, gust: 0, morning: 0, tier: 0, shadowEvery: 1, shadowTick: 0, npcDist: 140,
 };
 
 // Туман у земли: стелется по Глэйду и коридорам, в низинах гуще, к верху стен редеет.
@@ -49,7 +63,7 @@ function windGust(t) {
 function loadQuality() {
   let q = null;
   try { q = localStorage.getItem('maze-runner-quality'); } catch (e) { /* без сохранения */ }
-  if (!QUALITY[q]) q = matchMedia('(pointer: coarse)').matches ? 'low' : 'high';
+  if (!QUALITY[q]) q = matchMedia('(pointer: coarse)').matches ? 'low' : 'auto';
   return q;
 }
 
@@ -131,18 +145,61 @@ function initWorld() {
   World.resize = resize;
   resize();
   window.addEventListener('resize', resize);
+  // Неподвижные детали построек — одним куском на материал (см. batch.js)
+  World.batched = batchStatic();
+  applyTier(World.quality === 'auto' ? 1 : QUALITY_TIER[World.quality] ?? 0);
 }
 
-// Держим частоту кадров: если тормозит — уменьшаем внутреннее разрешение
+// Ступень качества — сразу, без перезапуска
+function applyTier(i) {
+  i = Math.max(0, Math.min(TIERS.length - 1, i));
+  const T = TIERS[i];
+  World.tier = i;
+  World.shadowEvery = T.shadowEvery;
+  World.npcDist = T.npc;
+  if (World.Q.msaa) setPostMSAA(T.msaa);
+  PostFX.bloom = World.Q.bloom && T.bloom;
+  const sh = World.sun.shadow, size = Math.min(T.shadow, World.Q.shadow);
+  if (sh.mapSize.x !== size) {
+    sh.mapSize.set(size, size);
+    if (sh.map) { sh.map.dispose(); sh.map = null; }
+  }
+  for (const g of GLADE3D.grassSets || []) g.im.count = Math.round(g.full * T.grass);
+  if (World.scale !== T.scale) { World.scale = T.scale; World.resize(); }
+}
+
+// Выбор в настройках: «Авто» подстраивается само, остальное — постоянная ступень
+function setQuality(q) {
+  World.quality = q;
+  Auto.cool = 2;
+  Auto.floor = 0;
+  applyTier(q === 'auto' ? World.tier : QUALITY_TIER[q] ?? 0);
+}
+
+// «Авто»: смотрим на настоящую частоту кадров. Меньше 50 — ступень вниз; стабильно больше 80 — осторожно вверх.
+// Если после подъёма снова тормозит — какое-то время выше не лезем, чтобы качество не прыгало туда-сюда
+const Auto = { acc: 0, n: 0, cool: 3, up: 0, floor: 0, floorT: 0, lastUp: -99, t: 0 };
 function adaptResolution(dt) {
-  World.frameTimes.push(dt);
-  if (World.frameTimes.length < 60) return;
-  const avg = World.frameTimes.reduce((a, b) => a + b, 0) / World.frameTimes.length;
-  World.frameTimes.length = 0;
-  let s = World.scale;
-  if (avg > 1 / 40 && s > 0.55) s = Math.max(0.55, s - 0.1);
-  else if (avg < 1 / 57 && s < 1) s = Math.min(1, s + 0.05);
-  if (s !== World.scale) { World.scale = s; World.resize(); }
+  Auto.t += dt;
+  Auto.floorT -= dt;
+  if (Auto.floorT <= 0) Auto.floor = 0;
+  if (World.quality !== 'auto') return;
+  Auto.cool -= dt;
+  if (Auto.cool > 0) { Auto.acc = Auto.n = 0; return; }        // загрузка, сборка шейдеров — не считаем
+  Auto.acc += dt;
+  Auto.n++;
+  if (Auto.acc < 1.5) return;
+  const fps = Auto.n / Auto.acc;
+  Auto.acc = Auto.n = 0;
+  if (fps < 50 && World.tier < TIERS.length - 1) {
+    if (Auto.t - Auto.lastUp < 10) { Auto.floor = World.tier + 1; Auto.floorT = 90; }
+    applyTier(World.tier + 1);
+    Auto.cool = 2;
+    Auto.up = 0;
+  } else if (fps > 80 && World.tier > Auto.floor) {
+    Auto.up += 1.5;
+    if (Auto.up >= 6) { applyTier(World.tier - 1); Auto.cool = 3; Auto.up = 0; Auto.lastUp = Auto.t; }
+  } else Auto.up = 0;
 }
 
 /* ---------- существа и предметы ---------- */
@@ -396,16 +453,18 @@ function updateCamera(dt) {
 
 /* ---------- камера главного меню: неспешные планы Глэйда и Лабиринта на закате ---------- */
 
-// Точки в тайлах (x, z) и метрах над землёй (h); abs — высота от нуля, а не от земли
+// Точки в тайлах (x, z) и метрах над землёй (h); abs — высота от нуля, а не от земли.
+// Сдвиги от Ящика растут вместе с Глэйдом (MF); Башню снимаем от её собственного места
+const MF = GLADE_LAYOUT_SCALE, MT = LAYOUT.tower;
 const MENU_SHOTS = [
   { title: 'Глэйд · закат', text: 'Ворота скоро закроются', len: 17,
-    p0: [MID + 2.0, 1.8, MID - 2.05], p1: [MID + 0.8, 2.15, MID - 2.6], l0: [MID - 6.6, 2.0, MID - 3.0], l1: [MID - 6.6, 2.0, MID - 3.9] },
+    p0: [MID + 2.0 * MF, 1.8, MID - 2.05 * MF], p1: [MID + 0.8 * MF, 2.15, MID - 2.6 * MF], l0: [MID - 6.6 * MF, 2.0, MID - 3.0 * MF], l1: [MID - 6.6 * MF, 2.0, MID - 3.9 * MF] },
   { title: 'Северные ворота', text: 'Каждую ночь они смыкаются', len: 15,
     p0: [MID + 0.7, 1.7, GLADE_LO * 2 + 3.1], p1: [MID - 0.4, 8.5, GLADE_LO * 2 + 2.5], l0: [MID, 6, GLADE_LO * 2 - 1], l1: [MID, 15, GLADE_LO * 2 - 1.5] },
   { title: 'Лабиринт', text: 'Стены сдвигаются по ночам', len: 16, abs: true,
-    p0: [MID + 21, 50, MID - 10], p1: [MID + 18, 46, MID + 4], l0: [MID + 3, 0, MID - 2], l1: [MID + 2, 0, MID + 2] },
+    p0: [MID + 21 * MF, 50 * Math.sqrt(MF), MID - 10 * MF], p1: [MID + 18 * MF, 46 * Math.sqrt(MF), MID + 4 * MF], l0: [MID + 3 * MF, 0, MID - 2 * MF], l1: [MID + 2 * MF, 0, MID + 2 * MF] },
   { title: 'Башня', text: 'Отсюда видно весь Глэйд', len: 14,
-    p0: [MID + 4.7, 1.6, MID - 1.5], p1: [MID + 3.9, 2.6, MID - 1.1], l0: [MID + 2, 8, MID - 4], l1: [MID + 2, 13, MID - 4] },
+    p0: [MT.x + 2.7, 1.6, MT.y + 2.5], p1: [MT.x + 1.9, 2.6, MT.y + 2.9], l0: [MT.x, 8, MT.y], l1: [MT.x, 13, MT.y] },
 ];
 const MenuCam = { i: 0, t: 0, fade: 0, shown: -1 };
 const _mp = new THREE.Vector3(), _ml = new THREE.Vector3();
@@ -468,6 +527,7 @@ function renderWorld(dt) {
   syncItems(t);
   syncGrievers(t, dt, dn);
   syncNpcs(t, dt);
+  updateHouseDoors(dt);
   syncExit();
   if (Game.state === 'play') ambientEffects(dt);
   updateFauna(dt);
@@ -482,6 +542,13 @@ function renderWorld(dt) {
   Sky.mesh.position.copy(World.camera.position);
   renderWeather(dt, World.camera, Game.indoor);
   updateParticles(dt, World.camera, World.renderer, World.scene.fog);
+  // Тени: на нижних ступенях карту солнца перерисовываем через кадр-два; тень фонарика — только когда он светит
+  // (включать и выключать castShadow нельзя — пересоберутся шейдеры всех материалов)
+  const sunSh = World.sun.shadow;
+  World.shadowTick++;
+  sunSh.autoUpdate = false;
+  sunSh.needsUpdate = !sunSh.map || World.shadowEvery <= 1 || World.shadowTick % World.shadowEvery === 0;
+  World.flash.shadow.autoUpdate = World.flash.castShadow && World.flash.intensity > 0.02;
   renderPostFX(World.scene, World.camera, t);
   if (dt > 0) adaptResolution(dt);
 }

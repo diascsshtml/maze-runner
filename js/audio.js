@@ -372,6 +372,21 @@ const Sound = {
     this.clank();
     this.noise(0.15, { vol: 0.2, freq: 1800, type: 'bandpass', q: 2, attack: 0.002, delay: 0.95 });
   },
+  // Дверь дома: открывается — щёлкает щеколда и скрипят петли; закрывается — глухой хлопок досок
+  door(open, at) {
+    if (!this.ctx) return;
+    const p = this.spot(at, { ref: 3, roll: 1.4, life: 3 });
+    this.noise(0.03, { vol: 0.16, freq: 2600, type: 'bandpass', q: 3, attack: 0.002, dest: p });
+    if (open) {
+      const f = 380 + Math.random() * 120;
+      this.tone(f, 0.55, { type: 'sawtooth', vol: 0.025, to: f * 1.6, attack: 0.06, delay: 0.05, dest: p });
+      this.tone(f * 2.1, 0.4, { type: 'triangle', vol: 0.02, to: f * 2.9, attack: 0.05, delay: 0.12, dest: p });
+    } else {
+      this.tone(95, 0.25, { vol: 0.22, to: 55, attack: 0.004, dest: p });
+      this.noise(0.18, { vol: 0.2, freq: 700, attack: 0.003, dest: p });
+      this.noise(0.03, { vol: 0.12, freq: 3000, type: 'bandpass', q: 3, attack: 0.002, delay: 0.09, dest: p });
+    }
+  },
   boxArrives() {
     if (!this.ctx) return;
     const p = this.spot({ x: tw(MID), y: -2, z: tw(MID) }, { ref: 6, roll: 1, life: 7 });
@@ -721,6 +736,24 @@ const Sound = {
     }
   },
 
+  // Пузырёк ручья: короткий тон, который быстро взлетает вверх и гаснет (так звенит вода между камнями);
+  // big — бульканье: ниже и громче
+  riverBubble(dest, delay = 0, big = 1) {
+    const ctx = this.ctx, t = ctx.currentTime + 0.03 + delay, r = Math.random();
+    const f = (big > 1 ? 260 + r * 500 : 420 + r * r * 1500), len = (big > 1 ? 0.06 : 0.025) + Math.random() * 0.05;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(f, t);
+    o.frequency.exponentialRampToValueAtTime(f * (1.4 + Math.random() * 0.8), t + len);
+    const vol = (0.024 + Math.random() * Math.random() * 0.12) * big;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    o.connect(g).connect(dest);
+    o.start(t);
+    o.stop(t + len + 0.02);
+  },
+
   /* ---------- фон: ветер, гул Лабиринта, костёр, река, птицы, сверчки, дыхание ---------- */
 
   startAmbient() {
@@ -760,8 +793,11 @@ const Sound = {
       whistle2: loop(this.white, 'bandpass', 1350, 12, this.worldDry),
       leaves: loop(this.white, 'bandpass', 4200, 0.7, this.worldDry),
       fire: loop(this.brown, 'bandpass', 420, 0.8, fireP),
-      river: loop(this.white, 'bandpass', 950, 0.7, riverP),
-      river2: loop(this.white, 'bandpass', 2600, 2.5, riverP),
+      // Река — неглубокий ручей, не море: тихий светлый шелест и мягкое течение, а поверх — журчание (riverBubble)
+      river: loop(this.white, 'bandpass', 2400, 0.6, riverP),
+      river2: loop(this.brown, 'lowpass', 520, 0.7, riverP),
+      riverBus: (() => { const g = ctx.createGain(); g.gain.value = 0; g.connect(riverP); return g; })(),
+      bubble: 0, gurgle: 2,
       rain: loop(this.white, 'highpass', 900, 0.5, this.worldDry),
       rain2: loop(this.white, 'bandpass', 3800, 0.8, this.worldDry),
       fireP, riverP, drone, t: 0, space: 0.2,
@@ -802,11 +838,28 @@ const Sound = {
     set(a.rain2.g.gain, rain * (s.indoor ? 0.02 : 0.08), 0.6);
     if (s.river && s.river.d < 80) {
       this.place(a.riverP, s.river.x, s.river.y, s.river.z);
-      set(a.river.g.gain, 0.32, 0.5);
-      set(a.river2.g.gain, 0.05 + 0.04 * Math.sin(a.t * 1.7), 0.2);
+      // Шелест дышит неровно — течение то быстрее, то тише
+      const flow = 0.75 + 0.15 * Math.sin(a.t * 0.9) + 0.1 * Math.sin(a.t * 2.3 + 1);
+      set(a.river.g.gain, 0.16 * flow, 0.3);
+      set(a.river2.g.gain, 0.1 * flow, 0.5);
+      set(a.riverBus.gain, 1, 0.3);
+      // Журчание: вода перекатывается через камни — частые короткие «пузырьки», иногда бульканье пачкой
+      if (s.river.d < 45) {
+        a.bubble -= dt;
+        while (a.bubble <= 0) {
+          a.bubble += 0.025 + Math.random() * 0.05;
+          this.riverBubble(a.riverBus, Math.random() * 0.05);
+        }
+        a.gurgle -= dt;
+        if (a.gurgle <= 0) {
+          a.gurgle = 1.2 + Math.random() * 2.8;
+          for (let k = 0, n = 3 + Math.floor(Math.random() * 5); k < n; k++) this.riverBubble(a.riverBus, k * (0.03 + Math.random() * 0.04), 1.6);
+        }
+      }
     } else {
       set(a.river.g.gain, 0, 0.5);
       set(a.river2.g.gain, 0, 0.5);
+      set(a.riverBus.gain, 0, 0.5);
     }
 
     const around = (r0, r1, y0, y1) => {
