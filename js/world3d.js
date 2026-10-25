@@ -372,7 +372,8 @@ function updateTimeOfDay(dt) {
   const light = heldLight(), darkK = dn > 0.3 ? Math.min(1, (dn - 0.3) / 0.5) : 0;
   World.flash.intensity = (light ? 0.25 : 1.3) * darkK;
   const flick = 0.85 + Math.sin(Game.time * 13) * 0.1 + Math.sin(Game.time * 7.3) * 0.06;
-  World.handLight.intensity = light ? (0.5 + dn * 3.4) * (light > 1 ? 1.5 : flick) : 0;
+  // Днём пламя почти ничего не освещает (иначе по руке рядом с огнём ползёт рыжая полоса)
+  World.handLight.intensity = light ? (0.12 + dn * 3.78) * (light > 1 ? 1.5 : flick) : 0;
   World.handLight.distance = light > 1 ? 26 : 18;
   World.fireLight.intensity = (0.6 + dn * 3.2) * flick;
   World.kitchenLight.intensity = (0.6 + dn * 1.8) * flick * (isBuilt('dining') ? 1 : 0);

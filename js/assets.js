@@ -8,10 +8,11 @@ const ASSET_LIST = {
   // Модели, сделанные в Blender (папка blender/, лежат в assets/blender)
   blender: ['house_forge', 'house_bunk1', 'house_bunk2', 'house_dining', 'house_storage', 'house_blood', 'tower',
     'tree_oak', 'tree_tall', 'tree_mid', 'tree_young', 'bed', 'table_long', 'hearth', 'furnace', 'anvil', 'shelf', 'chest',
-    'barrel', 'sacks', 'mapboard', 'workbench', 'stool', 'grave', 'bridge', 'campfire_logs', 'glader', 'teresa', 'fp_arm',
-    'item_bag', 'item_knife', 'item_torch', 'item_spear', 'item_rope', 'item_flask', 'item_apple', 'item_map',
-    'item_bandage', 'item_crowbar', 'item_ration', 'item_watch', 'item_scrap', 'item_herb', 'item_gear', 'item_keycard', 'item_note',
-    'tool_axe', 'tool_hammer', 'tool_hoe', 'tool_ladle', 'tool_spear',
+    'barrel', 'sacks', 'mapboard', 'workbench', 'stool', 'grave', 'bridge', 'campfire_logs', 'glader', 'teresa', 'item_bag',
+    // Руки от первого лица и вещи «как в Rust» (blender/viewmodel.py, build_gear.py): в руке, у жителей и на земле
+    'fp_arms', 'gear_axe', 'gear_pickaxe', 'gear_hammer', 'gear_knife', 'gear_spear', 'gear_torch', 'gear_crowbar', 'gear_hoe',
+    'gear_ladle', 'gear_lantern', 'gear_bucket', 'gear_flask', 'gear_apple', 'gear_ration', 'gear_bandage', 'gear_stew',
+    'gear_watch', 'gear_map', 'gear_note', 'gear_keycard', 'gear_scrap', 'gear_herb', 'gear_gear', 'gear_rope',
     // Лабиринт: секции стен, створки ворот, завал, плита-ловушка, рычаг, табличка сектора и гривер
     'wall_0', 'wall_1', 'wall_2', 'gate_a', 'gate_b', 'rubble', 'trap_plate', 'lever', 'plaque', 'code_stand', 'griever',
     // Глэйд: Ящик, факелы, скамьи, загон, поленница, стройка, Кутузка, грядки и живность
@@ -25,8 +26,8 @@ const ASSET_LIST = {
     // Лабиринт: ориентиры секторов и приметы участков
     'lm_tree_giant', 'lm_tree_dead', 'lm_mast', 'lm_column', 'lm_gear', 'lm_slab', 'lm_pool', 'lm_camp',
     'pipe_run', 'floor_grate', 'wall_roots', 'concrete_chunks',
-    // Выживание: кирка, похлёбка, частокол, бочка для дождя
-    'tool_pickaxe', 'item_stew', 'palisade', 'rain_barrel'],
+    // Выживание: частокол, бочка для дождя
+    'palisade', 'rain_barrel'],
 };
 
 const ASSETS = { tex: {}, models: {}, gltf: {}, leaves: null, real: false, blocked: location.protocol === 'file:' };

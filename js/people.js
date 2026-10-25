@@ -5,6 +5,12 @@ const PEOPLE = { npcs: new Map(), body: null, fp: null };
 const _bv1 = new THREE.Vector3(), _bv2 = new THREE.Vector3(), _bv3 = new THREE.Vector3(), _bv4 = new THREE.Vector3();
 const _bq = new THREE.Quaternion(), _bm = new THREE.Matrix4(), _up = new THREE.Vector3(0, 1, 0), _down = new THREE.Vector3(0, -1, 0);
 const MODEL_H = { glader: 1.88, teresa: 1.62 };           // рост моделей в метрах (с причёской)
+// Естественная скорость клипов из записей движений (м/с при timeScale 1) — по ней темп шага подгоняется под скорость
+const GAIT = { glader: { walk: 1.44, run: 3.53, carry: 0.66 }, teresa: { walk: 1.22, run: 3.0, carry: 0.56 } };
+// Кулак правой руки (как в Blender: сгиб вокруг оси X кости) — поверх любого клипа, пока в руке инструмент
+const FIST = [['index', [0.85, 1, 0.75], 86], ['middle', [0.85, 1, 0.75], 86], ['ring', [0.85, 1, 0.75], 86], ['pinky', [0.85, 1, 0.75], 86],
+  ['thumb', [0.35, 0.6, 0.6], 55]];
+const _xAxis = new THREE.Vector3(1, 0, 0);
 
 function tinted(mat, hex) {
   const m = mat.clone();
@@ -45,7 +51,15 @@ function makeGladerModel(spec) {
   // Поза головы в покое: в клипах, где голова не двигается, дорожки для неё нет,
   // поэтому перед каждым кадром возвращаем её сюда и уже потом поворачиваем к Томасу
   const headRest = bones.head ? bones.head.quaternion.clone() : null;
-  return { holder, root, mixer, actions, bones, headRest, current: null, height: MODEL_H[id] * scale, speed: 0 };
+  const fist = [];
+  for (const [f, k, deg] of FIST) {
+    for (let j = 1; j <= 3; j++) {
+      const b = bones[`${f}_0${j}_r`];
+      if (b) fist.push([b, b.quaternion.clone().multiply(new THREE.Quaternion().setFromAxisAngle(_xAxis, THREE.MathUtils.degToRad(deg * k[j - 1])))]);
+    }
+  }
+  return { holder, root, mixer, actions, bones, headRest, fist, grip: root.getObjectByName('grip_r'), gait: GAIT[id], gaitK: scale,
+    current: null, height: MODEL_H[id] * scale, speed: 0 };
 }
 
 function playAct(m, name, speed = 1, start = 0) {
@@ -87,18 +101,28 @@ function placeTool(m, toolType) {
   m.tool.quaternion.setFromRotationMatrix(_bm.makeBasis(_bv3, _bv1, _bv2));
 }
 
-// Инструмент из Blender (топор, молоток, мотыга, половник, копьё) или запасной из примитивов
+// Инструмент — в кулак, на точку хвата из Blender (рукоять через кулак, лезвие — по костяшкам).
+// Копьё стража стоит древком к земле, его ставим отдельно (placeTool); без точки хвата — тоже по-старому
+function attachTool(m, type) {
+  if (m.grip && type !== 'spear' && (ASSETS.models['gear_' + type] || ASSETS.models['tool_' + type])) m.grip.add(m.tool);
+  else World.scene.add(m.tool);
+}
+
+function dropTool(m) {
+  if (m.tool && m.tool.parent) m.tool.parent.remove(m.tool);
+}
+
 // Житель сменил работу — в руке другой инструмент
 function refreshNpcTool(n) {
   const m = PEOPLE.npcs.get(n);
   if (!m) return;
-  if (m.tool) World.scene.remove(m.tool);
+  dropTool(m);
   m.tool = n.tool ? toolModel(n.tool) : null;
-  if (m.tool) World.scene.add(m.tool);
+  if (m.tool) attachTool(m, n.tool);
 }
 
 function toolModel(type) {
-  const src = ASSETS.models['tool_' + type];
+  const src = ASSETS.models['gear_' + type] || ASSETS.models['tool_' + type];
   if (!src) return makeTool(type);
   const t = src.clone(true);
   t.traverse(o => { if (o.isMesh) o.castShadow = true; });
@@ -137,18 +161,28 @@ function visualAct(n) {
   return n.act;
 }
 
-// Звуки работы в такт анимации: удар молота, топора, мотыги (доля клипа, где инструмент бьёт), шаги тех, кто рядом
-const WORK_HIT = { hammer: 0.75, chop: 0.68, hoe: 0.75 };
+// Звуки в такт движению из записи: удар — в нижней точке замаха правой руки (если она опустилась на столько метров),
+// шаг — когда стопа, опускаясь, касается земли
+const WORK_HIT = { hammer: 0.1, chop: 0.3, hoe: 0.25 };
+function lowPoint(m, key, bone, drop) {
+  bone.getWorldPosition(_bv3);
+  const y = _bv3.y, s = m[key] || (m[key] = { y, top: y, v: 0 });
+  const v = y - s.y, hit = s.v < -1e-4 && v >= 0 && s.top - y > drop;
+  if (hit) s.top = y;
+  else if (y > s.top) s.top = y;
+  s.y = y;
+  s.v = v;
+  return hit;
+}
+
 function workSounds(m, act, d, x, y, z) {
-  const a = m.current;
-  if (!a || d > 40) { m.ph = null; return; }
-  const dur = a.getClip().duration, ph = (a.time % dur) / dur;
-  if (m.phAct !== a || m.ph === null || m.ph === undefined) { m.phAct = a; m.ph = ph; return; }
-  const last = m.ph, crossed = at => (last <= ph ? last < at && ph >= at : at > last || ph >= at);
-  m.ph = ph;
-  const hit = WORK_HIT[act];
-  if (hit !== undefined && crossed(hit)) Sound.work(act, x, y, z);
-  else if ((act === 'walk' || act === 'run' || act === 'carry') && d < 14 && (crossed(0.25) || crossed(0.75))) Sound.work('step', x, y, z);
+  if (d > 40 || !m.node.visible) return;
+  const B = m.bones;
+  if (WORK_HIT[act] !== undefined && B.hand_r) {
+    if (lowPoint(m, 'hitR', B.hand_r, WORK_HIT[act] * m.gaitK)) Sound.work(act, x, y, z);
+  } else if ((act === 'walk' || act === 'run' || act === 'carry') && d < 14 && B.foot_l) {
+    if (lowPoint(m, 'stepL', B.foot_l, 0.03) || lowPoint(m, 'stepR', B.foot_r, 0.03)) Sound.work('step', x, y, z);
+  }
 }
 
 // Где житель виден на самом деле (в тайлах): у рабочего места модель стоит ближе к предмету, чем клетка пути
@@ -178,7 +212,7 @@ function syncNpcs(t, dt) {
       m.node = node;
       if (useGlb && n.tool) {
         m.tool = toolModel(n.tool);
-        World.scene.add(m.tool);
+        attachTool(m, n.tool);
       }
       if (useGlb && n.role === 'woodcutter') {
         m.bundle = logBundle();
@@ -245,20 +279,24 @@ function syncNpcs(t, dt) {
     m.lastWalk = n.walk;
     const limp = n.injured > 0 && (n.act === 'walk' || n.act === 'run');
     let act = approaching && reach ? (n.goal.carry ? 'carry' : 'walk') : visualAct(n), speed = 1;
-    if (act === 'walk' || act === 'carry') speed = approaching && reach ? 1.2 : Math.min(2.2, Math.max(0.6, m.speed / 1.12));
-    else if (act === 'run') speed = Math.min(2.2, Math.max(0.7, m.speed / 3.8));
+    if (act === 'walk' || act === 'carry') speed = approaching && reach ? 1.2 : Math.min(2.2, Math.max(0.6, m.speed / (m.gait[act] * m.gaitK)));
+    else if (act === 'run') speed = Math.min(2.2, Math.max(0.7, m.speed / (m.gait.run * m.gaitK)));
     if (limp) speed = 0.8;
     if (m.headRest) m.bones.head.quaternion.copy(m.headRest);
     playAct(m, act, speed);
     if (limp) m.node.rotation.z = Math.sin(n.t * 4.5) * 0.09 + 0.05;
     // Невидимого не анимируем; далёкого — через кадр (время копится, шаг не сбивается)
     m.mixAcc = Math.min(1, (m.mixAcc || 0) + dt);
-    if (m.node.visible && (band < 2 || (m.skip = !m.skip))) { m.mixer.update(m.mixAcc); m.mixAcc = 0; }
+    if (m.node.visible && (band < 2 || (m.skip = !m.skip))) {
+      m.mixer.update(m.mixAcc);
+      m.mixAcc = 0;
+      if (m.tool && m.tool.visible && act !== 'sit') for (const [b, q] of m.fist) b.quaternion.copy(q);
+    }
     workSounds(m, act, d, x, y, z);
     if (m.headRest && n.act !== 'sleep') m.bones.head.rotateY(n.lookYaw * 0.6);
     if (m.tool) {
       m.tool.visible = m.node.visible && n.act !== 'sleep' && n.act !== 'sit' && act !== 'jump';
-      placeTool(m, n.tool);
+      if (m.tool.parent === World.scene) placeTool(m, n.tool);
     }
     if (m.bundle) m.bundle.visible = act === 'carry';
   }
@@ -282,7 +320,7 @@ function npcDetail(m, band) {
 function clearNpcModels() {
   for (const m of PEOPLE.npcs.values()) {
     World.scene.remove(m.node);
-    if (m.tool) World.scene.remove(m.tool);
+    dropTool(m);
   }
   PEOPLE.npcs.clear();
 }
@@ -309,9 +347,15 @@ function updatePlayerBody(dt) {
   const back = 0.18;
   m.holder.position.set(tw(p.x) - Math.cos(p.yaw) * back, p.h, tw(p.y) - Math.sin(p.yaw) * back);
   m.holder.rotation.y = Math.PI / 2 - p.yaw;
-  const act = p.climb ? 'climb' : p.air ? 'jump' : !p.moving ? 'idle' : p.sprinting ? 'run' : 'walk';
+  // Томас и шагом идёт быстро (~6 м/с — как трусца), поэтому ноги — из клипа бега, в темп настоящей скорости.
   // В прыжке пропускаем присед из начала клипа: Томас отрывается от земли сразу
-  playAct(m, act, act === 'walk' ? 1.5 : act === 'climb' ? (Input.forward() ? 1 : 0) : act === 'run' ? 1.8 : act === 'jump' ? 1.3 : 1.1, act === 'jump' ? 0.22 : 0);
+  const v = Math.hypot(p.x - (m.px ?? p.x), p.y - (m.py ?? p.y)) * S / Math.max(dt, 1e-3);
+  m.px = p.x;
+  m.py = p.y;
+  m.v = (m.v || 0) + (v - (m.v || 0)) * Math.min(1, dt * 8);
+  const act = p.climb ? 'climb' : p.air ? 'jump' : !p.moving ? 'idle' : 'run';
+  playAct(m, act, act === 'run' ? Math.min(2.4, Math.max(0.8, m.v / m.gait.run)) : act === 'climb' ? (Input.forward() ? 1 : 0) : act === 'jump' ? 1.25 : 1,
+    act === 'jump' ? 0.38 : 0);
   m.mixer.update(dt);
   for (const b of HIDDEN_BONES) if (m.bones[b]) m.bones[b].scale.setScalar(0.001);
 }
@@ -331,7 +375,171 @@ function viewModelMat(src) {
   return m;
 }
 
+// Как держать вещь: поза покоя (клип hold_*), точка хвата в кисти и движение работы (клип use_*)
+const FP_HOLD = {
+  axe: ['tool', 'grip_r', 'use_chop'], pickaxe: ['tool', 'grip_r', 'use_chop'], hammer: ['tool', 'grip_r', 'use_hammer'],
+  crowbar: ['tool', 'grip_r', 'use_hammer'], knife: ['tool', 'grip_r', 'use_slash'], spear: ['spear', 'grip_r', 'use_thrust'],
+  torch: ['torch', 'grip_r', null], lantern: ['lantern', 'hang_r', null], bucket: ['bucket', 'hang_r', null],
+  map: ['paper', 'palm_r', null], note: ['paper', 'palm_r', null], keycard: ['paper', 'palm_r', null],
+  apple: ['small', 'palm_r', 'use_eat'], ration: ['small', 'palm_r', 'use_eat'], stew: ['small', 'palm_r', 'use_eat'],
+  flask: ['small', 'palm_r', 'use_drink'], bandage: ['small', 'palm_r', 'use_bandage'],
+};
+const FP_SMALL = ['small', 'palm_r', null];
+const FP_SHEET = { map: 0.06, note: 0.035 };      // на сколько лист сдвинут от середины ладони к кончикам пальцев
+const _fq1 = new THREE.Quaternion(), _fq2 = new THREE.Quaternion(), _fv = new THREE.Vector3();
+
+// Руки от первого лица, как в Rust (fp_arms из Blender): обе руки на скелете, вещь в кулаке, на ладони или на дужке,
+// клипы покоя и работы. Без модели — прежняя рука из одной формы
 function initFirstPerson() {
+  const g = ASSETS.gltf.fp_arms;
+  if (!g || !THREE.SkeletonUtils) { initLegacyArm(); return; }
+  const root = THREE.SkeletonUtils.clone(g.scene);
+  const tint = { skin: '#e2b896', shirt: '#7d8a92' };
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    o.castShadow = false;
+    o.frustumCulled = false;
+    const fix = m => {
+      const v = viewModelMat(m);
+      if (tint[m.name]) v.color = new THREE.Color(tint[m.name]).convertSRGBToLinear();
+      return v;
+    };
+    o.material = Array.isArray(o.material) ? o.material.map(fix) : fix(o.material);
+  });
+  // Глаза модели — в камеру: модель смотрит по +Z, камера — по −Z
+  const holder = new THREE.Group();
+  holder.add(root);
+  root.rotation.y = Math.PI;
+  root.updateMatrixWorld(true);
+  const eye = root.getObjectByName('eye');
+  if (eye) root.position.sub(eye.getWorldPosition(new THREE.Vector3()));
+  World.camera.add(holder);
+  const mixer = new THREE.AnimationMixer(root), actions = {};
+  for (const clip of g.animations) {
+    const a = actions[clip.name] = mixer.clipAction(clip);
+    if (clip.name.startsWith('use_')) { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; }
+  }
+  const sockets = {};
+  for (const n of ['grip_r', 'palm_r', 'hang_r']) sockets[n] = root.getObjectByName(n);
+  PEOPLE.fp = { holder, root, mixer, actions, sockets, cur: null, use: null, itemType: null, item: null, hold: null,
+    sway: 0, swayY: 0, draw: 1, sprint: 0, lastSw: 0, lock: null };
+}
+
+function fpPlay(F, name, fade = 0.22) {
+  const a = F.actions[name] || F.actions.hold_small;
+  if (!a || F.cur === a) return;
+  a.reset().play();
+  if (F.cur) a.crossFadeFrom(F.cur, fade, false);
+  F.cur = a;
+}
+
+// Движение работы: один раз, потом снова поза покоя. from — с какой доли клипа начать (удар звучит сразу,
+// поэтому взмах инструментом начинаем с вершины замаха — лезвие опускается вместе со звуком)
+const FP_STRIKE = { use_chop: 0.3, use_hammer: 0.35, use_slash: 0.3, use_grab: 0.25 };
+function fpUseClip(F, name, from = 0) {
+  if (!name || !F.actions[name]) return;
+  F.cur = null;
+  fpPlay(F, name, 0.08);
+  F.use = F.actions[name];
+  F.use.time = from * F.use.getClip().duration;
+}
+
+// Из useHeld: съесть, выпить, перевязаться — вещь видна в руке, пока идёт движение, даже если уже израсходована
+function fpUse(type) {
+  const F = PEOPLE.fp, clip = FP_HOLD[type] && FP_HOLD[type][2];
+  if (!F || !F.mixer || !clip || !F.actions[clip]) return;
+  F.lock = { type, t: F.actions[clip].getClip().duration };
+  if (F.itemType !== type) { fpItem(F, type); F.itemType = type; }
+  fpUseClip(F, clip);
+}
+
+function fpItem(F, type) {
+  if (F.item && F.item.parent) F.item.parent.remove(F.item);
+  F.item = null;
+  F.hold = type ? FP_HOLD[type] || FP_SMALL : ['empty', null, null];
+  const id = type && itemModel(type), src = id && ASSETS.models[id];
+  if (!src) return;
+  F.item = src.clone(true);
+  F.item.traverse(o => {
+    if (!o.isMesh) return;
+    o.castShadow = false;
+    o.frustumCulled = false;
+    o.material = Array.isArray(o.material) ? o.material.map(viewModelMat) : viewModelMat(o.material);
+  });
+  // Сумки и вещи без новой модели — маленькими на ладони
+  if (!id.startsWith('gear_')) F.item.scale.setScalar(ITEM_DEFS[type].bag ? 0.45 : 0.8);
+  // Лист держат за нижний край: он лежит на пальцах и выше них, большой палец прижимает его спереди
+  if (FP_SHEET[type]) F.item.position.z = -FP_SHEET[type];
+  (F.sockets[F.hold[1]] || F.sockets.grip_r || F.root).add(F.item);
+}
+
+function updateFirstPerson(dt) {
+  const F = PEOPLE.fp, p = Game.player;
+  if (!F) return;
+  if (!F.mixer) { updateLegacyArm(dt); return; }
+  const h = heldItem();
+  let type = h ? h.type : null;
+  if (F.lock) {
+    F.lock.t -= dt;
+    if (F.lock.t > 0) type = F.lock.type;
+    else F.lock = null;
+  }
+  if (type !== F.itemType || !F.hold) {
+    fpItem(F, type);
+    F.itemType = type;
+    F.draw = 0;
+    F.use = null;
+  }
+  const hold = F.hold;
+  F.holder.visible = Game.state === 'play' && !Lift.active;
+  // Удар инструментом (рубка, кирка, стройка) — по каждому взмаху; пустой рукой — сгрести хворост
+  const sw = Math.max(Gather.swing, Settle.swing || 0);
+  if (sw > F.lastSw + 0.5) {
+    const clip = type ? (FP_STRIKE[hold[2]] !== undefined ? hold[2] : null) : 'use_grab';
+    fpUseClip(F, clip, FP_STRIKE[clip] || 0);
+  }
+  F.lastSw = sw;
+  if (F.use && (!F.use.isRunning() || p.climb)) F.use = null;
+  if (!F.use) fpPlay(F, p.climb ? 'climb' : 'hold_' + hold[0]);
+  if (F.actions.climb) F.actions.climb.timeScale = p.climb ? Math.abs(Input.forward()) * 1.3 : 1;
+  F.mixer.update(dt);
+  if (F.item) F.item.visible = !p.climb;
+  // Достать вещь: рука поднимается снизу; рывок — руки опущены и наклонены; шаг — покачивание; поворот — рука отстаёт
+  F.draw = Math.min(1, F.draw + dt * 3.2);
+  const drawK = 1 - Math.pow(1 - F.draw, 3), d = Math.max(dt, 1e-3);
+  F.sprint += ((p.sprinting && !p.climb ? 1 : 0) - F.sprint) * Math.min(1, dt * 7);
+  const step = p.moving && !p.climb ? p.walk * S * (p.sprinting ? 1.7 : 2.1) : 0;
+  const bob = Math.sin(step), bob2 = Math.cos(step / 2);
+  let dyaw = p.yaw - (F.yaw ?? p.yaw);
+  while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+  while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+  const dpitch = p.pitch - (F.pitch ?? p.pitch);
+  F.yaw = p.yaw;
+  F.pitch = p.pitch;
+  F.sway += (Math.max(-0.05, Math.min(0.05, -dyaw / d * 0.01)) - F.sway) * Math.min(1, dt * 8);
+  F.swayY += (Math.max(-0.04, Math.min(0.04, -dpitch / d * 0.008)) - F.swayY) * Math.min(1, dt * 8);
+  const amp = p.sprinting ? 1.6 : 1;
+  F.holder.position.set(F.sway + bob2 * 0.012 * amp, F.swayY - Math.abs(bob) * 0.012 * amp - F.sprint * 0.06 - (1 - drawK) * 0.32, F.sprint * 0.03);
+  F.holder.rotation.set(-F.sprint * 0.3 - (1 - drawK) * 0.5 + F.swayY * 0.6, F.sway * 1.2 + F.sprint * 0.18, bob2 * 0.02 * amp + F.sprint * 0.12);
+  // Фонарь и ведро висят отвесно, как бы ни была повёрнута кисть
+  if (F.item && hold[1] === 'hang_r') {
+    F.item.parent.getWorldQuaternion(_fq1).invert();
+    World.camera.getWorldDirection(_fv);
+    _fq2.setFromAxisAngle(_up, Math.atan2(-_fv.x, -_fv.z));
+    F.item.quaternion.copy(_fq1.multiply(_fq2));
+  }
+  // Огонь факела и свет — от пламени (точка flame в модели), а не от ладони; стекло фонаря светится
+  const lit = (type === 'torch' || type === 'lantern') && h && h.fuel > 0;
+  if (F.item && type === 'lantern') F.item.traverse(o => { if (o.isMesh && o.material.name === 'glass') { o.material.emissive.setRGB(1, 0.62, 0.3); o.material.emissiveIntensity = lit ? 1.4 : 0; } });
+  if (lit && F.item && Game.state === 'play') {
+    (F.item.getObjectByName('flame') || F.item).getWorldPosition(_bv2);
+    if (type === 'torch') emitTorch(_bv2.x, _bv2.y - 0.02, _bv2.z, dt);
+    World.handLight.position.copy(World.camera.worldToLocal(_bv2));
+    World.handLight.position.y += type === 'torch' ? 0.1 : 0.03;
+  }
+}
+
+function initLegacyArm() {
   const fp = new THREE.Group();
   fp.position.set(0.22, -0.3, -0.18);
   World.camera.add(fp);
@@ -369,7 +577,7 @@ function initFirstPerson() {
   PEOPLE.fp = { group: fp, arm, grip, left, itemType: null, item: null, sway: 0 };
 }
 
-function updateFirstPerson(dt) {
+function updateLegacyArm(dt) {
   const F = PEOPLE.fp, p = Game.player;
   if (!F) return;
   const h = heldItem();
@@ -377,8 +585,8 @@ function updateFirstPerson(dt) {
   if (type !== F.itemType) {
     if (F.item) F.grip.remove(F.item);
     F.item = null;
-    if (type && ASSETS.models[ITEM_DEFS[type].model]) {
-      F.item = ASSETS.models[ITEM_DEFS[type].model].clone(true);
+    if (type && ASSETS.models[itemModel(type)]) {
+      F.item = ASSETS.models[itemModel(type)].clone(true);
       F.item.traverse(o => {
         if (!o.isMesh) return;
         o.castShadow = false;
@@ -421,7 +629,7 @@ function updateFirstPerson(dt) {
   if ((type === 'torch' || type === 'lantern') && h.fuel > 0 && F.item && Game.state === 'play') {
     F.item.getWorldPosition(_bv1);
     _bv2.set(0, type === 'torch' ? 0 : 0.12, type === 'torch' ? -0.42 : 0).applyQuaternion(F.item.getWorldQuaternion(_bq)).add(_bv1);
-    if (type === 'torch') emitFire(_bv2.x, _bv2.y - 0.05, _bv2.z, dt, 0.18);
+    if (type === 'torch') emitTorch(_bv2.x, _bv2.y - 0.05, _bv2.z, dt);
     // Свет исходит от пламени (или стекла фонаря), а не от ладони
     World.handLight.position.copy(World.camera.worldToLocal(_bv2));
     World.handLight.position.y += type === 'torch' ? 0.12 : 0.04;

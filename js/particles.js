@@ -181,6 +181,38 @@ function emitFire(x, y, z, dt, power = 1) {
   }
 }
 
+// Пламя факела в руке: язык огня ~20 см из множества мелких коротких языков (крупные редкие частицы костра
+// у самых глаз выглядели бы отдельными светящимися шарами), редкие искры и тонкая струйка дыма
+function emitTorch(x, y, z, dt) {
+  const n = Math.floor(dt * 90 + Math.random());
+  for (let i = 0; i < n; i++) {
+    FX.fire.emit({
+      x: x + rnd(-0.022, 0.022), y: y + rnd(-0.01, 0.03), z: z + rnd(-0.022, 0.022),
+      vx: rnd(-0.05, 0.05), vy: rnd(0.5, 0.9), vz: rnd(-0.05, 0.05),
+      life: rnd(0.22, 0.45), size: rnd(0.06, 0.09), size1: 0.012,
+      // Частицы ложатся друг на друга (их ~20 сразу): каждая тусклая, иначе свечение сливается в белый шар
+      color: [1.1, 0.42, 0.09, 0.85], color1: [0.8, 0.14, 0.02, 0], drag: 0.9, spin: rnd(-2, 2),
+    });
+  }
+  if (Math.random() < dt * 1.6) {
+    FX.glow.emit({
+      x, y: y + 0.08, z, vx: rnd(-0.3, 0.3), vy: rnd(0.8, 1.6), vz: rnd(-0.3, 0.3),
+      life: rnd(0.5, 1.1), size: 0.018, size1: 0.006,
+      color: [8, 3.5, 1, 1], color1: [4, 0.8, 0.1, 0], drag: 0.6, grav: -0.3,
+    });
+  }
+  if (Math.random() < dt * 4) {
+    const nk = Math.min(1, Game.darkness / 0.9), dk = 1 - 0.85 * nk;
+    FX.smoke.emit({
+      x: x + rnd(-0.02, 0.02), y: y + 0.2, z: z + rnd(-0.02, 0.02),
+      vx: rnd(-0.05, 0.05) + 0.06, vy: rnd(0.4, 0.7), vz: rnd(-0.05, 0.05),
+      life: rnd(1.4, 2.4), size: 0.07, size1: 0.55,
+      color: [0.07 * dk + 0.04 * nk, 0.065 * dk + 0.02 * nk, 0.06 * dk + 0.008 * nk, 0.22], color1: [0.1 * dk, 0.1 * dk, 0.1 * dk, 0],
+      drag: 0.3, spin: rnd(-0.4, 0.4),
+    });
+  }
+}
+
 // Облако пыли (сдвиг стен, ворота)
 function emitDust(x, y, z, spread, count, color = [0.32, 0.28, 0.22]) {
   const dk = 1 - 0.8 * Math.min(1, Game.darkness / 0.9);    // в темноте пыль не светится

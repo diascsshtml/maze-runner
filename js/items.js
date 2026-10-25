@@ -6,29 +6,38 @@ const ITEM_DEFS = {
   bag: { name: 'Холщовая сумка', model: 'item_bag', w: 0, bag: 1 },
   bag2: { name: 'Кожаная сумка', model: 'item_bag', w: 0, bag: 2 },
   bag3: { name: 'Рюкзак бегуна', model: 'item_bag', w: 0, bag: 3 },
-  knife: { name: 'Нож', model: 'item_knife', w: 0.4, hint: 'E у ловушки — обезвредить' },
-  torch: { name: 'Факел', model: 'item_torch', w: 0.8, hint: 'светит ночью, горит 4 минуты', fuel: 240 },
-  lantern: { name: 'Фонарь', model: 'proc_lantern', w: 1.4, hint: 'ярче факела, горит 10 минут, заправка на складе', fuel: 600 },
-  spear: { name: 'Копьё', model: 'item_spear', w: 2.0, hint: 'один раз спасёт от жала' },
-  rope: { name: 'Верёвка', model: 'item_rope', w: 1.2, hint: 'E у завала — перелезть' },
-  crowbar: { name: 'Лом', model: 'item_crowbar', w: 2.4, hint: 'E у завала — разобрать быстрее' },
-  flask: { name: 'Фляга', model: 'item_flask', w: 0.6, hint: 'F — пить; в реке — набрать; у пожара — тушить' },
-  apple: { name: 'Яблоко', model: 'item_apple', w: 0.2, hint: 'F — съесть' },
-  ration: { name: 'Паёк бегуна', model: 'item_ration', w: 0.4, hint: 'F — все силы и минута быстрого бега' },
-  bandage: { name: 'Бинт', model: 'item_bandage', w: 0.1, hint: 'F — остановить кровь, +1 жизнь' },
-  watch: { name: 'Часы', model: 'item_watch', w: 0.2, hint: 'точное время до заката' },
-  map: { name: 'Карта бегунов', model: 'item_map', w: 0.1 },
-  axe: { name: 'Топор', model: 'tool_axe', w: 1.4, hint: 'E у дерева — рубить дрова, по 2 за раз' },
-  pickaxe: { name: 'Кирка', model: 'tool_pickaxe', w: 2.0, hint: 'E у валуна — колоть камень' },
-  hammer: { name: 'Молоток', model: 'tool_hammer', w: 0.8, hint: 'на стройке работаешь вдвое быстрее' },
-  bucket: { name: 'Ведро', model: 'bucket', w: 1.0, hint: 'E у реки — 4 воды на склад; F у горящего дома — тушить' },
-  stew: { name: 'Похлёбка', model: 'item_stew', w: 0.5, hint: 'F — съесть: все силы, голод до утра не страшен' },
-  scrap: { name: 'Металлолом', model: 'item_scrap', w: 1.5, hint: 'сдай на склад — будет металл' },
-  herb: { name: 'Травы', model: 'item_herb', w: 0.1, hint: 'сдай на склад — медакам на бинты' },
-  gear: { name: 'Шестерня', model: 'item_gear', w: 0.5, hint: 'деталь механизма — из неё делают часы' },
-  keycard: { name: 'Карта-ключ ПОРОК', model: 'item_keycard', w: 0.05, hint: 'откуда она в Лабиринте?' },
-  note: { name: 'Записка', model: 'item_note', w: 0 },
+  knife: { name: 'Нож', model: 'gear_knife', alt: 'item_knife', w: 0.4, hint: 'E у ловушки — обезвредить' },
+  torch: { name: 'Факел', model: 'gear_torch', alt: 'item_torch', w: 0.8, hint: 'светит ночью, горит 4 минуты', fuel: 240 },
+  lantern: { name: 'Фонарь', model: 'gear_lantern', alt: 'proc_lantern', w: 1.4, hint: 'ярче факела, горит 10 минут, заправка на складе', fuel: 600 },
+  spear: { name: 'Копьё', model: 'gear_spear', alt: 'item_spear', w: 2.0, hint: 'один раз спасёт от жала' },
+  rope: { name: 'Верёвка', model: 'gear_rope', alt: 'item_rope', w: 1.2, hint: 'E у завала — перелезть' },
+  crowbar: { name: 'Лом', model: 'gear_crowbar', alt: 'item_crowbar', w: 2.4, hint: 'E у завала — разобрать быстрее' },
+  flask: { name: 'Фляга', model: 'gear_flask', alt: 'item_flask', w: 0.6, hint: 'F — пить; в реке — набрать; у пожара — тушить' },
+  apple: { name: 'Яблоко', model: 'gear_apple', alt: 'item_apple', w: 0.2, hint: 'F — съесть' },
+  ration: { name: 'Паёк бегуна', model: 'gear_ration', alt: 'item_ration', w: 0.4, hint: 'F — все силы и минута быстрого бега' },
+  bandage: { name: 'Бинт', model: 'gear_bandage', alt: 'item_bandage', w: 0.1, hint: 'F — остановить кровь, +1 жизнь' },
+  watch: { name: 'Часы', model: 'gear_watch', alt: 'item_watch', w: 0.2, hint: 'точное время до заката' },
+  map: { name: 'Карта бегунов', model: 'gear_map', alt: 'item_map', w: 0.1 },
+  axe: { name: 'Топор', model: 'gear_axe', alt: 'tool_axe', w: 1.4, hint: 'E у дерева — рубить дрова, по 2 за раз' },
+  pickaxe: { name: 'Кирка', model: 'gear_pickaxe', alt: 'tool_pickaxe', w: 2.0, hint: 'E у валуна — колоть камень' },
+  hammer: { name: 'Молоток', model: 'gear_hammer', alt: 'tool_hammer', w: 0.8, hint: 'на стройке работаешь вдвое быстрее' },
+  bucket: { name: 'Ведро', model: 'gear_bucket', alt: 'bucket', w: 1.0, hint: 'E у реки — 4 воды на склад; F у горящего дома — тушить' },
+  stew: { name: 'Похлёбка', model: 'gear_stew', alt: 'item_stew', w: 0.5, hint: 'F — съесть: все силы, голод до утра не страшен' },
+  scrap: { name: 'Металлолом', model: 'gear_scrap', alt: 'item_scrap', w: 1.5, hint: 'сдай на склад — будет металл' },
+  herb: { name: 'Травы', model: 'gear_herb', alt: 'item_herb', w: 0.1, hint: 'сдай на склад — медакам на бинты' },
+  gear: { name: 'Шестерня', model: 'gear_gear', alt: 'item_gear', w: 0.5, hint: 'деталь механизма — из неё делают часы' },
+  keycard: { name: 'Карта-ключ ПОРОК', model: 'gear_keycard', alt: 'item_keycard', w: 0.05, hint: 'откуда она в Лабиринте?' },
+  note: { name: 'Записка', model: 'gear_note', alt: 'item_note', w: 0 },
 };
+// Новые вещи (gear_*) сделаны «в руку»: у инструментов хват в начале координат и рукоять вверх, фонарь и ведро —
+// с дужкой в начале координат. На земле их кладём (и ставим) как надо — см. spawnWorldItem
+const LAY_FLAT = new Set(['knife', 'torch', 'spear', 'crowbar', 'axe', 'pickaxe', 'hammer']);
+
+// Какая модель есть у вещи: новая или прежняя
+function itemModel(type) {
+  const d = ITEM_DEFS[type];
+  return ASSETS.models[d.model] || !d.alt ? d.model : d.alt;
+}
 
 const BAGS = [
   { name: 'Без сумки', slots: 1, cap: 6 },
@@ -93,7 +102,14 @@ function upgradeBag(tier) {
 function spawnWorldItem(type, x, y, z, extra = {}) {
   const def = ITEM_DEFS[type];
   const it = { type, x, y, z, full: type === 'flask', fuel: def.fuel, ...extra };
-  it.mesh = put(def.model, x, y, z, thash(Math.round(x * 10), Math.round(z * 10)) * 6.28);
+  const id = itemModel(type);
+  it.mesh = put(id, x, y, z, thash(Math.round(x * 10), Math.round(z * 10)) * 6.28);
+  if (it.mesh && id.startsWith('gear_')) {
+    // Инструмент — на бок, рукоятью по земле; любая вещь — нижним краем на землю
+    if (LAY_FLAT.has(type)) { it.mesh.rotation.order = 'YXZ'; it.mesh.rotation.x = Math.PI / 2; it.mesh.rotation.z = 0.18; }
+    it.mesh.updateMatrixWorld(true);
+    it.mesh.position.y += y - new THREE.Box3().setFromObject(it.mesh).min.y;
+  }
   if (!it.mesh) it.mesh = mesh(new THREE.BoxGeometry(0.3, 0.1, 0.3), GM.wood, x, y + 0.05, z);
   if (def.bag > 1) it.mesh.scale.setScalar(def.bag === 2 ? 1.15 : 1.35);
   Items.world.push(it);
@@ -200,17 +216,20 @@ function useHeld() {
   const h = heldItem(), p = Game.player;
   if (!h) return;
   if (h.type === 'apple') {
+    fpUse('apple');
     p.stamina = Math.min(100, p.stamina + 45);
     p.exhausted = false;
     consumeHeld();
     toast('Яблоко съедено. Сил прибавилось.', 'good');
   } else if (h.type === 'ration') {
+    fpUse('ration');
     p.stamina = 100;
     p.exhausted = false;
     p.boost = 60;
     consumeHeld();
     toast('Паёк бегуна: силы полные, минуту бежишь быстрее.', 'good');
   } else if (h.type === 'stew') {
+    fpUse('stew');
     p.stamina = 100;
     p.exhausted = false;
     Life.hunger = false;
@@ -221,6 +240,7 @@ function useHeld() {
     else toast('Ведро: E у реки — набрать воды на склад.', 'info');
   } else if (h.type === 'bandage') {
     if (!p.bleed && p.hearts >= 3) { toast('Ты цел — бинт пока не нужен.', 'info'); return; }
+    fpUse('bandage');
     p.bleed = 0;
     p.hearts = Math.min(3, p.hearts + 1);
     consumeHeld();
@@ -228,7 +248,7 @@ function useHeld() {
   } else if (h.type === 'flask') {
     if (p.wet) { h.full = true; toast('Фляга наполнена речной водой.', 'info'); }
     else if (h.full && douse(p)) { h.full = false; }
-    else if (h.full) { h.full = false; p.stamina = 100; p.exhausted = false; toast('Ты напился. Силы восстановлены.', 'good'); }
+    else if (h.full) { fpUse('flask'); h.full = false; p.stamina = 100; p.exhausted = false; toast('Ты напился. Силы восстановлены.', 'good'); }
     else toast('Фляга пуста. Набери воды в реке (F, стоя в воде).', 'warn');
   } else if (h.type === 'watch') {
     const s = Math.max(0, Math.ceil(Game.timeLeft));
@@ -324,8 +344,9 @@ function makeItemThumbs() {
   const byModel = {}, box = new THREE.Box3(), sphere = new THREE.Sphere(), sz = new THREE.Vector3(), dir = new THREE.Vector3();
   try {
     for (const [type, def] of Object.entries(ITEM_DEFS)) {
-      if (byModel[def.model]) { THUMBS[type] = byModel[def.model]; continue; }
-      const src = ASSETS.models[def.model];
+      const mid = itemModel(type);
+      if (byModel[mid]) { THUMBS[type] = byModel[mid]; continue; }
+      const src = ASSETS.models[mid];
       if (!src) continue;
       const pivot = new THREE.Group(), obj = src.clone(true);
       pivot.add(obj);
@@ -358,7 +379,7 @@ function makeItemThumbs() {
         }
       }
       g.putImageData(img, 0, 0);
-      THUMBS[type] = byModel[def.model] = canvas.toDataURL('image/png');
+      THUMBS[type] = byModel[mid] = canvas.toDataURL('image/png');
       scene.remove(pivot);
     }
   } catch (e) { /* без картинок — будут значки */ }
