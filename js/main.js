@@ -104,11 +104,21 @@ function spawnDayGrievers() {
   }
 }
 
-// mode: 'new' — новая игра, 'continue' — с последнего сохранения, 'ngplus' — «Новая игра+»
-function startGame(mode = 'new') {
+// mode: 'new' — новая игра, 'continue' — с сохранения, 'ngplus' — «Новая игра+».
+// slot — ячейка: для 'continue' — какую загрузить (по умолчанию самая свежая), для новой — куда она будет сохраняться
+function startGame(mode = 'new', slot = 0) {
   if (typeof mode !== 'string') mode = 'new';
   Sound.init();
-  const save = mode === 'continue' ? readSave() : null;
+  if (mode === 'continue') slot = slot || latestSlot();
+  const save = mode === 'continue' ? readSlot(slot) : null;
+  if (mode === 'continue' && !save) { mode = 'new'; slot = 0; }      // ячейка пуста или испорчена — не трогаем её
+  // Новая игра — в свободную ячейку (или в ту, что выбрали взамен старой; её прежнее сохранение стирается)
+  if (mode !== 'continue') {
+    slot = slot || freeSlot();
+    if (slot) deleteSlot(slot);
+  }
+  Game.slot = slot || 0;
+  Game.playTime = save ? save.playTime || 0 : 0;
   Game.ngPlus = mode === 'ngplus' ? Meta.unlocked : save ? (save.ng || 0) : 0;
   closePanel();
   setupWorld(save);
@@ -159,7 +169,7 @@ function startNight() {
     const s = spawnPoint(Game.player, 16);
     Game.grievers.push(makeGriever(s.x, s.y, true));
   }
-  saveGame(true);
+  saveGame(true, 'закат');
 }
 
 function startDay() {
@@ -187,7 +197,7 @@ function startDay() {
   Story.offerAvailable();
   planShift();
   if (Story.flags.forecast) toast(`Минхо: «Этой ночью сдвинутся секторы ${Game.shiftPlan.join(' и ')}». На карте они подсвечены.`, 'info');
-  saveGame(true);
+  saveGame(true, 'рассвет');
 }
 
 // Второй день: Ящик поднимается вне расписания, в нём девушка
@@ -292,7 +302,7 @@ function gameOver() {
   saveBest(best);
   fillStats($('over-stats'), [[Game.day, 'дней в Лабиринте'], [`${codeCount()}/6`, 'фрагментов кода'], [Game.nightsOutside, 'ночей снаружи']]);
   $('btn-over-continue').hidden = !hasSave();
-  $('over-save').textContent = hasSave() ? `Сохранение ${saveStamp(readSave())}` : '';
+  $('over-save').textContent = hasSave() ? `Ячейка ${Game.slot} · сохранение ${saveStamp(readSave())}` : '';
   endGame('screen-over');
 }
 
@@ -328,6 +338,7 @@ function adjustPost(P) {
 
 function update(dt) {
   Game.time += dt;
+  Game.playTime = (Game.playTime || 0) + dt;
   if (Lift.active) { updateLift(dt); return; }      // вступление: мир стоит, пока Ящик поднимается
   updateBoxDoors(dt);
   const p = Game.player;
@@ -695,9 +706,10 @@ function saveStamp(d) {
   return t.toDateString() === today.toDateString() ? `в ${hm}` : `${t.getDate()}.${String(t.getMonth() + 1).padStart(2, '0')} в ${hm}`;
 }
 function showSaveState(justSaved = false) {
-  const el = $('save-state'), d = readSave();
+  const el = $('save-state'), d = Game.slot ? readSlot(Game.slot) : null;
   el.classList.toggle('ok', justSaved);
-  el.textContent = justSaved ? `Сохранено ${saveStamp(d)}` : d ? `Последнее сохранение ${saveStamp(d) || 'есть'}` : 'Сохранений ещё нет';
+  const cell = Game.slot ? `Ячейка ${Game.slot} · ` : '';
+  el.textContent = justSaved ? `${cell}сохранено ${saveStamp(d)}` : d ? `${cell}последнее сохранение ${saveStamp(d) || 'есть'}` : `${cell}эта игра ещё не сохранялась`;
 }
 
 // Список «клавиша — действие» для паузы и «Как играть»
@@ -749,10 +761,119 @@ function closeConfirm() {
 
 function toMainMenu() {
   confirmBox('Выйти в главное меню?', `Последнее сохранение ${saveStamp(readSave()) || 'ещё не сделано'}. Можно сохраниться перед выходом.`, [
-    { label: 'Сохранить и выйти', kind: 'btn', fn: () => { saveGame(true); enterMenu(); } },
+    // Снимок ячейки снимается со следующего кадра — меню ждёт его, иначе на снимке была бы камера меню
+    { label: 'Сохранить и выйти', kind: 'btn', fn: () => { saveGame(true, 'выход'); requestAnimationFrame(enterMenu); } },
     { label: 'Выйти без сохранения', kind: 'btn danger', fn: enterMenu },
     { label: 'Отмена', kind: 'btn ghost', fn: () => {} },
   ]);
+}
+
+/* ---------- ячейки сохранений ----------
+   mode: 'load' — из меню: загрузить или удалить; 'save' — из паузы: сохраниться в свою или другую ячейку
+   (игра дальше идёт в выбранной); 'new' — все ячейки заняты: какую заменить новой игрой (newMode — 'new'|'ngplus') */
+const SlotsUI = { mode: 'load', from: null, newMode: 'new', saved: 0 };
+
+function openSlots(mode, newMode = 'new') {
+  SlotsUI.mode = mode;
+  SlotsUI.newMode = newMode;
+  SlotsUI.from = [...document.querySelectorAll('.screen')].find(x => !x.hidden && x.id !== 'screen-slots');
+  SlotsUI.from = SlotsUI.from ? SlotsUI.from.id : null;
+  SlotsUI.saved = 0;
+  renderSlots();
+  showScreen('screen-slots');
+  Sound.ui('open');
+  focusFirstItem();
+}
+
+function closeSlots() {
+  Sound.ui('close');
+  showScreen(SlotsUI.from);
+  if (SlotsUI.from === 'screen-pause') showSaveState(SlotsUI.saved > 0);
+  if (Game.state === 'title') updateTitle();
+  focusFirstItem();
+}
+
+// Сколько наиграно: «1 ч 12 мин», «35 мин»
+function playTimeText(sec) {
+  const m = Math.round((sec || 0) / 60);
+  return m >= 60 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${Math.max(1, m)} мин`;
+}
+
+function slotAct(label, kind, fn, icon) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = kind;
+  b.innerHTML = icon ? `<svg class="ico"><use href="#${icon}"/></svg>` : '';
+  b.append(label);
+  b.addEventListener('click', fn);
+  return b;
+}
+
+function renderSlots() {
+  const mode = SlotsUI.mode;
+  $('slots-title').textContent = mode === 'save' ? 'Сохранить игру' : mode === 'new' ? 'Новая игра' : 'Загрузить игру';
+  $('slots-hint').textContent = mode === 'save'
+    ? 'Сохранись в ячейку этой игры или в другую — тогда игра дальше пойдёт в ней, а прежняя ячейка останется как была.'
+    : mode === 'new' ? 'Все ячейки заняты. Выбери, какое сохранение заменить новой игрой.'
+      : 'Выбери сохранение. Автосохранение идёт на рассвете и на закате — в ячейку той игры, что сейчас идёт.';
+  const grid = $('slot-grid');
+  grid.innerHTML = '';
+  for (let n = 1; n <= SLOTS; n++) {
+    const d = readSlot(n), cur = Game.slot === n && Game.state !== 'title', card = document.createElement('article');
+    card.className = 'slot-card' + (d ? '' : ' empty') + (cur ? ' current' : '') + (SlotsUI.saved === n ? ' just' : '');
+    const shot = document.createElement('div');
+    shot.className = 'slot-shot';
+    const img = d && slotShot(n);
+    if (img) shot.style.backgroundImage = `url(${img})`;
+    else shot.innerHTML = `<svg class="ico"><use href="#${d ? 'i-save' : 'i-box'}"/></svg>`;
+    const info = document.createElement('div');
+    info.className = 'slot-info';
+    const head = document.createElement('b');
+    head.textContent = `Ячейка ${n}`;
+    if (cur) head.insertAdjacentHTML('beforeend', ' <i class="slot-tag">эта игра</i>');
+    if (d && d.ng) head.insertAdjacentHTML('beforeend', ` <i class="slot-tag ng">игра+ ${d.ng}</i>`);
+    info.append(head);
+    const line = t => { const el = document.createElement('small'); el.textContent = t; info.append(el); };
+    if (d && d.game) {
+      const codes = (d.codes || []).filter(c => c.taken).length, season = d.life && SEASONS[d.life.season];
+      const built = d.settle && d.settle.built ? Object.keys(d.settle.built).length : 0;
+      line(`День ${d.game.day} · ${d.game.phase === 'day' ? 'день' : 'ночь'}${season ? ' · ' + season.name.toLowerCase() : ''}`);
+      line(`Код ${codes}/6 · жителей ${(d.npcs || []).length}${d.settle ? ` · построек ${built}` : ''}`);
+      line(`${saveStamp(d) || 'давно'}${d.why ? ' · ' + d.why : ''}${d.playTime ? ' · в игре ' + playTimeText(d.playTime) : ''}`);
+    } else line(mode === 'new' ? '' : 'Свободна');
+    const acts = document.createElement('div');
+    acts.className = 'slot-acts';
+    if (mode === 'load' && d) {
+      acts.append(slotAct('Загрузить', 'btn small', () => { Sound.ui('start'); startGame('continue', n); }, 'i-play'));
+      acts.append(slotAct('Удалить', 'btn ghost small danger', () => confirmBox(`Удалить ячейку ${n}?`,
+        `День ${d.game.day}, сохранено ${saveStamp(d)}. Это сохранение пропадёт насовсем.`, [
+          { label: 'Удалить', kind: 'btn danger', fn: () => { deleteSlot(n); renderSlots(); updateTitle(); if (!latestSlot()) closeSlots(); } },
+          { label: 'Отмена', kind: 'btn ghost', fn: () => {} },
+        ]), 'i-close'));
+    } else if (mode === 'save') {
+      const doSave = () => {
+        if (saveGame(true, 'вручную', n)) { SlotsUI.saved = n; Sound.ui('save'); toast(`Сохранено в ячейку ${n}.`, 'info'); }
+        else Sound.ui('error');
+        // Снимок появится после ближайшего кадра — тогда и перерисуем список
+        requestAnimationFrame(() => requestAnimationFrame(renderSlots));
+        renderSlots();
+      };
+      if (!d || cur) acts.append(slotAct(cur ? 'Сохранить сюда' : 'Сохранить в пустую', 'btn small', doSave, 'i-save'));
+      else acts.append(slotAct('Перезаписать', 'btn ghost small', () => confirmBox(`Перезаписать ячейку ${n}?`,
+        `Там игра: день ${d.game.day}, сохранено ${saveStamp(d)}. Её место займёт текущая игра.`, [
+          { label: 'Перезаписать', kind: 'btn danger', fn: doSave },
+          { label: 'Отмена', kind: 'btn ghost', fn: () => {} },
+        ]), 'i-save'));
+    } else if (mode === 'new' && d) {
+      acts.append(slotAct('Заменить', 'btn ghost small danger', () => confirmBox(`Начать новую игру в ячейке ${n}?`,
+        `Сохранение «день ${d.game.day}, ${saveStamp(d)}» будет стёрто.`, [
+          { label: 'Начать', kind: 'btn danger', fn: () => { Sound.ui('start'); startGame(SlotsUI.newMode, n); } },
+          { label: 'Отмена', kind: 'btn ghost', fn: () => {} },
+        ]), 'i-box'));
+    }
+    card.append(shot, info, acts);
+    grid.append(card);
+  }
 }
 
 // Главное меню: мир остаётся за спиной — Глэйд на закате, камера переходит от плана к плану
@@ -771,7 +892,7 @@ function enterMenu() {
 }
 
 function exitGame() {
-  if (Game.state === 'play' || Game.state === 'pause') saveGame(true);
+  if (Game.state === 'play' || Game.state === 'pause') saveGame(true, 'выход');
   Game.state = 'exit';
   Sound.idle(0);
   showScreen('screen-exit');
@@ -845,6 +966,11 @@ window.addEventListener('keydown', e => {
   }
   if (!$('screen-help').hidden) {
     if (e.code === 'Escape') { e.preventDefault(); closeHelp(); return; }
+    menuNav(e);
+    return;
+  }
+  if (!$('screen-slots').hidden) {
+    if (e.code === 'Escape') { e.preventDefault(); closeSlots(); return; }
     menuNav(e);
     return;
   }
@@ -1040,13 +1166,16 @@ function frame(now) {
 
 // Главное меню: «Продолжить» с подписью о сохранении, «Новая игра+» после побега
 function updateTitle() {
-  const d = readSave();
+  const last = latestSlot(), d = readSlot(last);
   $('btn-continue').hidden = !d;
   $('btn-start').classList.toggle('primary', !d);
   if (d && d.game) {
     const codes = (d.codes || []).filter(c => c.taken).length;
-    $('continue-info').textContent = `День ${d.game.day} · ${d.game.phase === 'day' ? 'день' : 'ночь'} · код ${codes}/6${d.t ? ' · ' + saveStamp(d) : ''}`;
+    $('continue-info').textContent = `Ячейка ${last} · день ${d.game.day} · ${d.game.phase === 'day' ? 'день' : 'ночь'} · код ${codes}/6${d.t ? ' · ' + saveStamp(d) : ''}`;
   }
+  const used = [...Array(SLOTS)].filter((_, i) => slotUsed(i + 1)).length;
+  $('btn-load').hidden = !used;
+  $('load-info').textContent = `${used} из ${SLOTS} ${used === 1 ? 'ячейки занята' : 'ячеек занято'} — выбери любую`;
   $('btn-ngplus').hidden = !Meta.unlocked;
   $('ngplus-info').textContent = `Уровень ${Meta.unlocked}: гриверов больше, стены злее`;
   showBest();
@@ -1060,6 +1189,7 @@ function showLoading(p, text) {
 async function boot() {
   loadSettings();
   loadMeta();
+  migrateSingleSave();
   Tutorial.load();
   Journal.loadPhotos();
   document.documentElement.style.setProperty('--ui-scale', Settings.uiScale);
@@ -1089,9 +1219,15 @@ async function boot() {
   const unlock = () => { Sound.init(); Sound.applyVolume(); };
   window.addEventListener('pointerdown', unlock, { once: true });
   window.addEventListener('keydown', unlock, { once: true });
-  for (const id of ['btn-start', 'btn-again', 'btn-win-again']) $(id).addEventListener('click', () => { Sound.init(); Sound.ui('start'); startGame('new'); });
-  for (const id of ['btn-continue', 'btn-over-continue']) $(id).addEventListener('click', () => { Sound.init(); Sound.ui('start'); startGame('continue'); });
-  for (const id of ['btn-ngplus', 'btn-win-ngplus']) $(id).addEventListener('click', () => { Sound.init(); Sound.ui('start'); startGame('ngplus'); });
+  // Новая игра — в свободную ячейку; если все заняты, игрок выбирает, какую заменить
+  const begin = mode => { Sound.init(); if (freeSlot()) { Sound.ui('start'); startGame(mode); } else openSlots('new', mode); };
+  for (const id of ['btn-start', 'btn-again', 'btn-win-again']) $(id).addEventListener('click', () => begin('new'));
+  $('btn-continue').addEventListener('click', () => { Sound.init(); Sound.ui('start'); startGame('continue', latestSlot()); });
+  $('btn-over-continue').addEventListener('click', () => { Sound.init(); Sound.ui('start'); startGame('continue', Game.slot); });
+  for (const id of ['btn-ngplus', 'btn-win-ngplus']) $(id).addEventListener('click', () => begin('ngplus'));
+  $('btn-load').addEventListener('click', () => { Sound.init(); openSlots('load'); });
+  $('btn-slots-close').addEventListener('click', closeSlots);
+  $('btn-slots-back').addEventListener('click', closeSlots);
   for (const id of ['btn-over-menu', 'btn-win-menu']) $(id).addEventListener('click', enterMenu);
   $('btn-settings').addEventListener('click', () => openSettings('screen-title'));
   $('btn-pause-settings').addEventListener('click', () => openSettings('screen-pause'));
@@ -1109,7 +1245,7 @@ async function boot() {
     { label: 'Остаться', kind: 'btn ghost', fn: () => {} },
   ]));
   $('btn-exit-back').addEventListener('click', () => { Game.exitShown = false; enterMenu(); });
-  $('btn-save').addEventListener('click', () => { if (saveGame(true)) { showSaveState(true); Sound.ui('save'); } else Sound.ui('error'); });
+  $('btn-save').addEventListener('click', () => openSlots('save'));
   $('btn-to-menu').addEventListener('click', toMainMenu);
   $('q-map').addEventListener('click', openMap);
   $('q-bag').addEventListener('click', openInventory);

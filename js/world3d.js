@@ -560,5 +560,7 @@ function renderWorld(dt) {
   sunSh.needsUpdate = !sunSh.map || World.shadowEvery <= 1 || World.shadowTick % World.shadowEvery === 0;
   World.flash.shadow.autoUpdate = World.flash.castShadow && World.flash.intensity > 0.02;
   renderPostFX(World.scene, World.camera, t);
+  // Снимок для ячейки сохранения: только сейчас, пока кадр ещё в буфере WebGL
+  if (World.onShot) { const fs = World.onShot; World.onShot = null; for (const f of fs) f(World.renderer.domElement); }
   if (dt > 0) adaptResolution(dt);
 }

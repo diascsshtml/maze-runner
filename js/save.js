@@ -2,9 +2,13 @@
 // Сохраняются Лабиринт и открытая карта, предметы, сумка, запасы и постройки, задания, доверие,
 // тайники, погода и время суток. «Новая игра+» открывается после побега: Лабиринт становится злее,
 // а прочитанные записки остаются в журнале.
+// Ячейки: у каждой игры своя ячейка (Game.slot), автосохранения идут в неё; из паузы можно сохраниться
+// в любую другую, в меню — загрузить любую. Рядом с ячейкой — маленький снимок места, где сохранились.
 
-const SAVE_KEY = 'maze-runner-save-v1', META_KEY = 'maze-runner-meta';
+const SAVE_KEY = 'maze-runner-save-v1', META_KEY = 'maze-runner-meta';   // SAVE_KEY — прежнее единственное сохранение
 const LEGACY_SAVE_KEY = SAVE_KEY + '-before-location-expansion';
+const SLOTS = 6;
+const slotKey = n => `maze-runner-slot-${n}`, shotKey = n => `maze-runner-slot-${n}-shot`;
 const Meta = { unlocked: 0, wins: 0, lore: new Set() };
 
 function loadMeta() {
@@ -17,8 +21,40 @@ function saveMeta() {
   try { localStorage.setItem(META_KEY, JSON.stringify({ unlocked: Meta.unlocked, wins: Meta.wins, lore: [...Meta.lore] })); } catch (e) { /* без сохранения */ }
 }
 
-function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
-function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ничего */ } }
+// Прежнее единственное сохранение переезжает в первую свободную ячейку (один раз)
+function migrateSingleSave() {
+  try {
+    const old = localStorage.getItem(SAVE_KEY);
+    if (!old) return;
+    const free = freeSlot();
+    if (!free) return;
+    localStorage.setItem(slotKey(free), old);
+    localStorage.removeItem(SAVE_KEY);
+  } catch (e) { /* без переезда */ }
+}
+
+function readSlot(n) {
+  try { return n ? JSON.parse(localStorage.getItem(slotKey(n))) : null; } catch (e) { return null; }
+}
+function slotShot(n) { try { return localStorage.getItem(shotKey(n)) || ''; } catch (e) { return ''; } }
+function slotUsed(n) { try { return !!localStorage.getItem(slotKey(n)); } catch (e) { return false; } }
+function freeSlot() { for (let n = 1; n <= SLOTS; n++) if (!slotUsed(n)) return n; return 0; }
+// Самое свежее сохранение — для «Продолжить»
+function latestSlot() {
+  let best = 0, bt = -1;
+  for (let n = 1; n <= SLOTS; n++) {
+    const d = readSlot(n);
+    if (d && (d.t || 0) > bt) { bt = d.t || 0; best = n; }
+  }
+  return best;
+}
+function deleteSlot(n) {
+  try { localStorage.removeItem(slotKey(n)); localStorage.removeItem(shotKey(n)); } catch (e) { /* ничего */ }
+}
+
+// Есть ли сохранение текущей игры (или вообще какое-нибудь, если игры ещё нет)
+function hasSave() { return Game.slot ? slotUsed(Game.slot) : !!latestSlot(); }
+function clearSave() { if (Game.slot) deleteSlot(Game.slot); }
 
 function b64(u8) {
   let s = '';
@@ -136,12 +172,15 @@ function migrateLegacyPositions(data, grid) {
   }
 }
 
-function saveGame(quiet = false) {
+// why — подпись в списке ячеек: «рассвет», «закат», «вручную», «выход»; slot — куда (по умолчанию — ячейка этой игры)
+function saveGame(quiet = false, why = 'вручную', slot = Game.slot) {
   if (Game.state !== 'play' && Game.state !== 'pause' && Game.state !== 'ui') return false;
+  if (!slot) slot = Game.slot = freeSlot() || latestSlot() || 1;
   const p = Game.player;
   const pick = (o, keys) => Object.fromEntries(keys.map(k => [k, o[k]]));
   const data = {
-    v: 2, grid: CELLS, mapSide: SIZE, gladeCells: GLADE_HI - GLADE_LO + 1, ng: Game.ngPlus, t: Date.now(),
+    v: 2, grid: CELLS, mapSide: SIZE, gladeCells: GLADE_HI - GLADE_LO + 1, ng: Game.ngPlus, t: Date.now(), why,
+    playTime: Math.round(Game.playTime || 0),
     game: pick(Game, ['day', 'phase', 'timeLeft', 'gate', 'shifted', 'warned', 'exitOpen', 'outsideNight', 'nightsOutside', 'teresaT', 'darkness', 'dusk']),
     player: pick(p, ['x', 'y', 'yaw', 'pitch', 'h', 'hearts', 'stamina', 'bleed']),
     maze: b64(Maze.tiles), explored: b64(Maze.explored), exit: Maze.exit,
@@ -162,21 +201,38 @@ function saveGame(quiet = false) {
     extra: Game.npcs.filter(n => !NPC_DATA.some(d => d.name === n.name)).map(n => n.name),
   };
   try {
-    const previous = readSave();
+    const previous = readSlot(slot);
     if (previous && (Number(previous.mapSide) || Math.round(Math.sqrt(unb64(previous.maze || '').length))) !== SIZE && !localStorage.getItem(LEGACY_SAVE_KEY)) {
       localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify(previous));
     }
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    localStorage.setItem(slotKey(slot), JSON.stringify(data));
+    Game.slot = slot;
+    takeSlotShot(slot);
     if (!quiet) toast('Игра сохранена.', 'info');
     return true;
   } catch (e) {
-    toast('Не получилось сохранить: в браузере кончилось место.', 'warn');
+    toast('Не получилось сохранить: в браузере кончилось место. Удали старые сохранения в меню «Загрузить игру».', 'warn');
     return false;
   }
 }
 
+// Снимок места для ячейки: кадр берётся сразу после ближайшей отрисовки (потом буфер WebGL уже пуст)
+function takeSlotShot(slot) {
+  (World.onShot = World.onShot || []).push(canvas => {
+    try {
+      const c = document.createElement('canvas');
+      c.width = 192;
+      c.height = 108;
+      const k = Math.max(c.width / canvas.width, c.height / canvas.height), w = canvas.width * k, h = canvas.height * k;
+      c.getContext('2d').drawImage(canvas, (c.width - w) / 2, (c.height - h) / 2, w, h);
+      localStorage.setItem(shotKey(slot), c.toDataURL('image/jpeg', 0.72));
+    } catch (e) { /* без снимка */ }
+  });
+}
+
+// Сохранение текущей игры (или самое свежее, пока игры нет)
 function readSave() {
-  try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return null; }
+  return readSlot(Game.slot || latestSlot());
 }
 
 // После изменения планировки кровать могла отсутствовать в старом сохранении или её место занято.

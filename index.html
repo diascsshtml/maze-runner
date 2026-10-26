@@ -158,6 +158,7 @@
     </div>
     <nav class="menu-list" id="menu-list" aria-label="Главное меню">
       <button class="menu-item primary" id="btn-continue" type="button" hidden><svg class="ico"><use href="#i-play"/></svg><span class="mi-text"><b>Продолжить</b><small id="continue-info"></small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
+      <button class="menu-item" id="btn-load" type="button" hidden><svg class="ico"><use href="#i-save"/></svg><span class="mi-text"><b>Загрузить игру</b><small id="load-info"></small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
       <button class="menu-item" id="btn-start" type="button" disabled><svg class="ico"><use href="#i-box"/></svg><span class="mi-text"><b>Новая игра</b><small>Подняться в Ящике в пустой Глэйд</small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
       <button class="menu-item" id="btn-ngplus" type="button" hidden><svg class="ico"><use href="#i-spark"/></svg><span class="mi-text"><b>Новая игра+</b><small id="ngplus-info"></small></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
       <button class="menu-item" id="btn-settings" type="button"><svg class="ico"><use href="#i-gear"/></svg><span class="mi-text"><b>Настройки</b></span><svg class="ico mi-go"><use href="#i-chev"/></svg></button>
@@ -228,6 +229,17 @@
       <dl class="keylist" id="help-keys"></dl>
     </div>
     <footer class="win-foot"><span class="grow">Клавиши меняются в настройках.</span><button class="btn small" id="btn-help-ok" type="button">Понятно</button></footer>
+  </div>
+</section>
+
+<section id="screen-slots" class="screen" hidden>
+  <div class="win frame slots-win" role="dialog" aria-labelledby="slots-title">
+    <header class="win-head"><svg class="ico"><use href="#i-save"/></svg><h2 id="slots-title">Сохранения</h2><button class="icon-btn" id="btn-slots-close" type="button" aria-label="Закрыть"><svg class="ico"><use href="#i-close"/></svg><kbd>Esc</kbd></button></header>
+    <div class="win-body">
+      <p class="slots-hint" id="slots-hint"></p>
+      <div class="slot-grid" id="slot-grid"></div>
+    </div>
+    <footer class="win-foot"><span class="grow">Сохранения хранятся в этом браузере.</span><button class="btn small" id="btn-slots-back" type="button">Назад</button></footer>
   </div>
 </section>
 

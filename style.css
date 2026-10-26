@@ -948,6 +948,59 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing:
 .win .inv-detail { background: rgba(255, 250, 236, 0.35); border: 1px dashed var(--stroke-2); }
 .win .paper { box-shadow: 0 0.35rem 0.9rem rgba(60, 40, 15, 0.35); }
 
+/* Ячейки сохранений: снимок места приклеен к листу, как фотография; первая строка — от руки */
+.slots-win { width: min(58rem, 100%); }
+.slots-hint { margin: 0 0 0.9rem; font-size: 0.85rem; color: var(--ink-2); text-wrap: pretty; }
+.slot-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.9rem; }
+.slot-card {
+  display: grid;
+  grid-template-columns: 9.6rem minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  gap: 0.55rem 0.85rem;
+  padding: 0.75rem;
+  background: rgba(255, 250, 236, 0.35);
+  border: 1px solid var(--stroke);
+  border-radius: 0.15rem;
+}
+.slot-card.current { border-color: var(--ink-2); box-shadow: 0 0 0 1px var(--ink-2) inset; }
+.slot-card.just { animation: slot-saved 1.4s ease-out; }
+.slot-card.empty { background: transparent; border-style: dashed; }
+.slot-shot {
+  grid-row: span 2;
+  align-self: start;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  background: #3a3328 center / cover no-repeat;
+  border: 0.3rem solid #f4ecd8;
+  box-shadow: 0 0.2rem 0.5rem rgba(60, 40, 15, 0.38);
+  transform: rotate(-1.5deg);
+}
+.slot-card:nth-child(even) .slot-shot { transform: rotate(1.3deg); }
+.slot-shot .ico { width: 1.8rem; height: 1.8rem; color: rgba(243, 234, 211, 0.5); }
+.slot-card.empty .slot-shot { background: var(--well); border-color: transparent; box-shadow: none; transform: none; }
+.slot-card.empty .slot-shot .ico { color: var(--ink-3); }
+.slot-info { display: grid; align-content: start; gap: 0.15rem; min-width: 0; }
+.slot-info b { font: 600 0.92rem var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; }
+.slot-info small { font-size: 0.8rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.slot-info small:first-of-type { font: 600 1.2rem/1.15 var(--font-hand); color: var(--ink); }
+.slot-card.empty .slot-info small:first-of-type { color: var(--ink-3); }
+.slot-tag {
+  margin-left: 0.3rem;
+  padding: 0.1rem 0.35rem;
+  font: 600 0.6rem var(--font-display);
+  font-style: normal;
+  letter-spacing: 0.12em;
+  vertical-align: 0.15em;
+  color: #f3ead3;
+  background: #3a2e20;
+  border-radius: 0.15rem;
+}
+.slot-tag.ng { background: var(--amber); }
+.slot-acts { display: flex; flex-wrap: wrap; gap: 0.4rem; align-self: end; }
+.slot-acts .btn .ico { width: 0.95rem; height: 0.95rem; }
+@keyframes slot-saved { from { background: rgba(77, 122, 44, 0.32); } }
+
 /* Разговор: реплика — от руки, варианты — строки в тетради */
 .talk-line { padding: 0.7rem 1rem; font: 600 1.45rem/1.25 var(--font-hand); border-left: 3px solid var(--ink-2); border-radius: 0.15rem; box-shadow: none; background: rgba(255, 250, 236, 0.4); }
 .talk-who h2 { font-size: 1.7rem; }
@@ -1322,6 +1375,8 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing:
   .pause-help { display: none; }
 }
 @media (max-width: 760px) {
+  .slot-grid { grid-template-columns: 1fr; }
+  .slot-card { grid-template-columns: 7.5rem minmax(0, 1fr); }
   .map-layout, .inv-layout { grid-template-columns: minmax(0, 1fr); }
   .map-side { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
   .rose { display: none; }
