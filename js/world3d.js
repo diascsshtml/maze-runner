@@ -98,7 +98,8 @@ function initWorld() {
   World.hemi = new THREE.HemisphereLight(0xbfd4ff, 0x4a4030, 0.3);
   scene.add(World.sun, World.sun.target, World.hemi);
 
-  World.flash = new THREE.SpotLight(0xfff0d0, 0, 45, 0.5, 0.6, 1.3);
+  // Затухание пологое: вблизи подсветка не выжигает лица и светлую одежду в белое, вдали светит почти как раньше
+  World.flash = new THREE.SpotLight(0xfff0d0, 0, 45, 0.5, 0.6, 0.6);
   World.flash.position.set(0.25, -0.2, 0);
   World.flash.target.position.set(0, -0.05, -1);
   World.flash.castShadow = Q.flashShadow;
@@ -359,7 +360,11 @@ function updateTimeOfDay(dt) {
   HEIGHT_FOG.w = 0.008 + mist * 0.03 + dn * 0.02 + mz * 0.008;
 
   const P = PostFX.params;
-  P.exposure = 0.95 + dusk * 0.1 + dn * 0.7 + Weather.flash * 0.6;
+  // Ночью глаза привыкают к темноте (экспозиция выше), но у костра и с факелом — к огню: иначе светлую кожу
+  // в свете пламени выжигает в белое
+  const nearFire = menu || !isBuilt('campfire') ? 0 : Math.max(0, 1 - Math.hypot(p.x - LAYOUT.campfire.x, p.y - LAYOUT.campfire.y) * S / 14);
+  World.fireAdapt = (World.fireAdapt || 0) + (Math.max(nearFire, heldLight() ? 0.55 : 0) - (World.fireAdapt || 0)) * Math.min(1, dt * 0.8);
+  P.exposure = 0.95 + dusk * 0.1 + dn * (0.7 - 0.5 * World.fireAdapt) + Weather.flash * 0.6;
   P.saturation = (1.06 - dn * 0.32) * (1 - mist * 0.12);
   P.vignette = 0.38 + dn * 0.25;
   P.bloom = 0.55 + dn * 0.45;
@@ -370,12 +375,13 @@ function updateTimeOfDay(dt) {
   // Свет вокруг игрока: с факелом — тёплый и яркий, без него — тусклый (глаза привыкли к темноте)
   // Фонарь светит ровнее и дальше факела
   const light = heldLight(), darkK = dn > 0.3 ? Math.min(1, (dn - 0.3) / 0.5) : 0;
-  World.flash.intensity = (light ? 0.25 : 1.3) * darkK;
+  World.flash.intensity = (light ? 0.2 : 1.0) * darkK;
   const flick = 0.85 + Math.sin(Game.time * 13) * 0.1 + Math.sin(Game.time * 7.3) * 0.06;
   // Днём пламя почти ничего не освещает (иначе по руке рядом с огнём ползёт рыжая полоса)
   World.handLight.intensity = light ? (0.12 + dn * 3.78) * (light > 1 ? 1.5 : flick) : 0;
   World.handLight.distance = light > 1 ? 26 : 18;
-  World.fireLight.intensity = (0.6 + dn * 3.2) * flick;
+  // Ночью свет костра сильный, но не слепящий: светлую кожу у самого огня иначе выжигает в белое
+  World.fireLight.intensity = (0.6 + dn * 2.3) * flick * (isBuilt('campfire') ? 1 : 0);
   World.kitchenLight.intensity = (0.6 + dn * 1.8) * flick * (isBuilt('dining') ? 1 : 0);
   World.forgeLight.intensity = (0.8 + dn * 1.6) * (0.8 + Math.sin(Game.time * 9) * 0.15) * (isBuilt('forge') ? 1 : 0);
   for (const l of World.gateLights) l.intensity = dn * 2.2 * flick;
@@ -544,6 +550,7 @@ function renderWorld(dt) {
   updateFirstPerson(dt);
   Sky.mesh.position.copy(World.camera.position);
   renderWeather(dt, World.camera, Game.indoor);
+  updateFlames(dt);
   updateParticles(dt, World.camera, World.renderer, World.scene.fog);
   // Тени: на нижних ступенях карту солнца перерисовываем через кадр-два; тень фонарика — только когда он светит
   // (включать и выключать castShadow нельзя — пересоберутся шейдеры всех материалов)

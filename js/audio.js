@@ -793,6 +793,10 @@ const Sound = {
       whistle2: loop(this.white, 'bandpass', 1350, 12, this.worldDry),
       leaves: loop(this.white, 'bandpass', 4200, 0.7, this.worldDry),
       fire: loop(this.brown, 'bandpass', 420, 0.8, fireP),
+      // Гул костра: низкое «дыхание» пламени, порывами
+      roar: loop(this.brown, 'lowpass', 230, 0.6, fireP),
+      // Факел в руке — тихий трепет пламени у самого уха
+      torch: loop(this.brown, 'bandpass', 520, 1.2, this.worldDry),
       // Река — неглубокий ручей, не море: тихий светлый шелест и мягкое течение, а поверх — журчание (riverBubble)
       river: loop(this.white, 'bandpass', 2400, 0.6, riverP),
       river2: loop(this.brown, 'lowpass', 520, 0.7, riverP),
@@ -801,7 +805,7 @@ const Sound = {
       rain: loop(this.white, 'highpass', 900, 0.5, this.worldDry),
       rain2: loop(this.white, 'bandpass', 3800, 0.8, this.worldDry),
       fireP, riverP, drone, t: 0, space: 0.2,
-      bird: 2, cricket: 0.5, crackle: 0, breath: 0, owl: 18, howl: 20, creak: 9, grunt: 8,
+      bird: 2, cricket: 0.5, crackle: 0, pop: 3, hiss: 9, flare: 0.5, torchTick: 0.5, breath: 0, owl: 18, howl: 20, creak: 9, grunt: 8,
     };
   },
 
@@ -830,7 +834,14 @@ const Sound = {
     set(a.whistle2.f.frequency, 1100 + 420 * g + 100 * Math.sin(a.t * 0.23 + 1), 0.9);
     set(a.leaves.g.gain, open ? (0.016 + 0.08 * g) * (0.4 + 0.6 * s.trees) : 0, 0.3);
     set(a.drone.gain, s.night ? (s.glade ? 0.018 : 0.07) : (s.glade ? 0 : 0.015), 2);
-    set(a.fire.g.gain, s.fire < 60 ? 0.3 * (0.85 + 0.15 * Math.sin(a.t * 3.1)) : 0, 0.25);
+    // Огонь дышит неровно: случайные вспышки (flare) поднимают гул и треск, потом спадают
+    a.flare = Math.random() < dt * 0.6 ? Math.max(a.flare, 0.5 + Math.random() * 0.5) : a.flare * Math.exp(-dt * 1.3);
+    const fl = 0.75 + 0.25 * Math.sin(a.t * 1.7) * Math.sin(a.t * 0.53 + 1) + a.flare * 0.5;
+    set(a.fire.g.gain, s.fire < 60 ? 0.24 * fl : 0, 0.2);
+    set(a.fire.f.frequency, 380 + a.flare * 160, 0.3);
+    set(a.roar.g.gain, s.fire < 60 ? 0.32 * fl : 0, 0.25);
+    const tk = 0.8 + 0.2 * Math.sin(a.t * 9.3) * Math.sin(a.t * 4.1);
+    set(a.torch.g.gain, s.torch ? 0.045 * tk : 0, 0.15);
     // Дождь: шелест вокруг, в доме — глухой стук по крыше
     const rain = s.rain || 0;
     set(a.rain.g.gain, rain * (s.indoor ? 0.18 : 0.22), 0.6);
@@ -900,10 +911,31 @@ const Sound = {
       }
     }
     if (s.fire < 25) {
-      a.crackle -= dt;
+      // Треск: мелкие щелчки пачками (то громче, то тише), изредка — хлопок смолы с осыпью щелчков и шипение сырого полена
+      a.crackle -= dt * (1 + a.flare * 2);
       if (a.crackle <= 0) {
-        a.crackle = 0.04 + Math.random() * 0.28;
-        this.noise(0.03, { vol: 0.2, freq: 3000 + Math.random() * 2500, type: 'highpass', attack: 0.002, dest: a.fireP });
+        a.crackle = Math.random() < 0.3 ? 0.015 + Math.random() * 0.04 : 0.06 + Math.random() * 0.3;
+        const v = 0.05 + Math.pow(Math.random(), 3) * 0.3;
+        this.noise(0.006 + Math.random() * 0.018, { vol: v, freq: 2200 + Math.random() * 4500, type: 'highpass', attack: 0.001, dest: a.fireP });
+      }
+      a.pop -= dt;
+      if (a.pop <= 0) {
+        a.pop = 1.5 + Math.random() * 5;
+        this.noise(0.06, { vol: 0.32, freq: 800 + Math.random() * 900, type: 'bandpass', q: 1.6, attack: 0.001, dest: a.fireP });
+        this.noise(0.02, { vol: 0.25, freq: 3500, type: 'highpass', attack: 0.001, dest: a.fireP });
+        for (let i = 0; i < 3; i++) this.noise(0.01, { vol: 0.1, freq: 4000 + Math.random() * 3000, type: 'highpass', attack: 0.001, delay: 0.04 + Math.random() * 0.25, dest: a.fireP });
+      }
+      a.hiss -= dt;
+      if (a.hiss <= 0) {
+        a.hiss = 7 + Math.random() * 12;
+        this.noise(0.6 + Math.random() * 1.2, { vol: 0.035, freq: 5500, type: 'highpass', attack: 0.25, dest: a.fireP });
+      }
+    }
+    if (s.torch) {
+      a.torchTick -= dt;
+      if (a.torchTick <= 0) {
+        a.torchTick = 0.15 + Math.random() * 0.9;
+        this.noise(0.008, { vol: 0.03 + Math.random() * 0.05, freq: 3000 + Math.random() * 3000, type: 'highpass', attack: 0.001, dest: this.worldDry });
       }
     }
     if (s.stamina < 40) {

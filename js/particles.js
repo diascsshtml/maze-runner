@@ -150,8 +150,8 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 /* ---------- готовые эффекты ---------- */
 
 // Пламя костра или факела в точке (x, y, z); power — размер огня
-function emitFire(x, y, z, dt, power = 1) {
-  const n = Math.random() < dt * 45 * power ? 1 + Math.floor(power) : 0;
+function emitFire(x, y, z, dt, power = 1, fireK = 1) {
+  const n = Math.random() < dt * 45 * power * fireK ? 1 + Math.floor(power) : 0;
   for (let i = 0; i < n; i++) {
     FX.fire.emit({
       x: x + rnd(-0.25, 0.25) * power, y: y + rnd(0, 0.15), z: z + rnd(-0.25, 0.25) * power,
@@ -184,7 +184,7 @@ function emitFire(x, y, z, dt, power = 1) {
 // Пламя факела в руке: язык огня ~20 см из множества мелких коротких языков (крупные редкие частицы костра
 // у самых глаз выглядели бы отдельными светящимися шарами), редкие искры и тонкая струйка дыма
 function emitTorch(x, y, z, dt) {
-  const n = Math.floor(dt * 90 + Math.random());
+  const n = Math.floor(dt * 12 + Math.random());
   for (let i = 0; i < n; i++) {
     FX.fire.emit({
       x: x + rnd(-0.022, 0.022), y: y + rnd(-0.01, 0.03), z: z + rnd(-0.022, 0.022),

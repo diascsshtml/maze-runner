@@ -642,9 +642,12 @@ function buildGlade(quality) {
 // Огонь, дым, искры, фонари ночью, рябь на воде
 function updateGlade(dt, night, px, pz) {
   WIND.uTime.value += dt;
+  // Пламя — языки шейдером (flame.js); частицы дают искры, дым и редкие отрывающиеся языки
   for (const f of [...GLADE3D.fires, ...GLADE3D.torches]) {
-    if (f.struct && !isBuilt(f.struct)) continue;
-    if (Math.hypot(f.x - px, f.z - pz) < 90) emitFire(f.x, f.y, f.z, dt, f.power * (f.power < 1 ? 0.5 + night * 0.5 : 1));
+    const on = !(f.struct && !isBuilt(f.struct)) && Math.hypot(f.x - px, f.z - pz) < 90;
+    if (on && !f.flame) f.flame = flameForFire(f);
+    if (f.flame) f.flame.visible = on;
+    if (on) emitFire(f.x, f.y, f.z, dt, f.power * (f.power < 1 ? 0.5 + night * 0.5 : 1), 0);
   }
   for (const l of GLADE3D.lanterns) if (l.glow) l.glow.material.opacity = Math.max(0, night - 0.3) * (0.85 + Math.sin(Game.time * 9 + l.x) * 0.1);
   if (GLADE3D.water) GLADE3D.water.offset.x -= dt * 0.05;

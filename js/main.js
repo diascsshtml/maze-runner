@@ -483,7 +483,9 @@ function ambientState(p, inGlade) {
     glade: inGlade, indoor, night: Game.phase === 'night' || Game.timeLeft < 15,
     height: p.h - ground, gust: World.gust || 0,
     trees: inGlade ? Math.min(1, Math.max(0, (p.y - MID - 1) / 6)) : 0,
-    fire: Math.hypot(p.x - LAYOUT.campfire.x, p.y - LAYOUT.campfire.y) * S, stamina: p.stamina,
+    // Костёр слышно, только когда он построен (в новой игре Глэйд пуст)
+    fire: isBuilt('campfire') ? Math.hypot(p.x - LAYOUT.campfire.x, p.y - LAYOUT.campfire.y) * S : 1e9, stamina: p.stamina,
+    torch: heldLight() === 1 && Game.state === 'play',
     river: { x: r.x, y: riverBase(r.s) - RIVER.water, z: r.z, d: r.d },
     pen: { x: px, y: groundH(px, pz) + 0.5, z: pz, d: Math.hypot(x - px, z - pz) },
     rain: Weather.cur.rain, snow: Weather.cur.snow,

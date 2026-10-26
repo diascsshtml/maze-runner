@@ -8,8 +8,10 @@ const MODEL_H = { glader: 1.88, teresa: 1.62 };           // рост модел
 // Естественная скорость клипов из записей движений (м/с при timeScale 1) — по ней темп шага подгоняется под скорость
 const GAIT = { glader: { walk: 1.44, run: 3.53, carry: 0.66 }, teresa: { walk: 1.22, run: 3.0, carry: 0.56 } };
 // Кулак правой руки (как в Blender: сгиб вокруг оси X кости) — поверх любого клипа, пока в руке инструмент
-const FIST = [['index', [0.85, 1, 0.75], 86], ['middle', [0.85, 1, 0.75], 86], ['ring', [0.85, 1, 0.75], 86], ['pinky', [0.85, 1, 0.75], 86],
-  ['thumb', [0.35, 0.6, 0.6], 55]];
+// Хват инструмента — как у рук игрока (viewmodel.py: GRIP 62°, мизинец сжат сильнее указательного): пальцы
+// обхватывают рукоять, а точка хвата grip_r в модели стоит в середине этого обхвата
+const FIST = [['index', [0.85, 1, 0.75], 58.3], ['middle', [0.85, 1, 0.75], 62], ['ring', [0.85, 1, 0.75], 65.1], ['pinky', [0.85, 1, 0.75], 68.2],
+  ['thumb', [0.35, 0.6, 0.6], 50]];
 const _xAxis = new THREE.Vector3(1, 0, 0);
 
 function tinted(mat, hex) {
@@ -470,6 +472,12 @@ function fpItem(F, type) {
   if (!id.startsWith('gear_')) F.item.scale.setScalar(ITEM_DEFS[type].bag ? 0.45 : 0.8);
   // Лист держат за нижний край: он лежит на пальцах и выше них, большой палец прижимает его спереди
   if (FP_SHEET[type]) F.item.position.z = -FP_SHEET[type];
+  // Факел — с живым пламенем (flame.js) над намоткой; горит, пока есть смола
+  if (type === 'torch') {
+    F.flame = makeFlame(0.24, 3, 0.012);
+    (F.item.getObjectByName('flame') || F.item).add(F.flame);
+    F.flame.position.y -= 0.03;
+  } else F.flame = null;
   (F.sockets[F.hold[1]] || F.sockets.grip_r || F.root).add(F.item);
 }
 
@@ -530,6 +538,7 @@ function updateFirstPerson(dt) {
   }
   // Огонь факела и свет — от пламени (точка flame в модели), а не от ладони; стекло фонаря светится
   const lit = (type === 'torch' || type === 'lantern') && h && h.fuel > 0;
+  if (F.flame) F.flame.visible = lit && Game.state === 'play';
   if (F.item && type === 'lantern') F.item.traverse(o => { if (o.isMesh && o.material.name === 'glass') { o.material.emissive.setRGB(1, 0.62, 0.3); o.material.emissiveIntensity = lit ? 1.4 : 0; } });
   if (lit && F.item && Game.state === 'play') {
     (F.item.getObjectByName('flame') || F.item).getWorldPosition(_bv2);
