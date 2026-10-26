@@ -251,12 +251,13 @@ function syncNpcs(t, dt) {
     m.node.rotation.set(0, 0, 0);
     if (n.act === 'sleep' && n.goal && n.goal.bed) {
       // Лежит на кровати на спине, головой к западной стороне кровати
-      const b = n.goal.bed;
-      x = tw(b.wx) + 0.88;
-      z = tw(b.wy);
+      // (дом могли поставить повёрнутым — кровать повёрнута вместе с ним, yaw)
+      const b = n.goal.bed, yaw = b.yaw || 0;
+      x = tw(b.wx) + 0.88 * Math.cos(yaw);
+      z = tw(b.wy) - 0.88 * Math.sin(yaw);
       y = supportH(tw(b.wx), tw(b.wy), y + 0.5) + 0.58;
       m.node.rotation.order = 'YXZ';
-      m.node.rotation.set(-Math.PI / 2, Math.PI / 2, 0);
+      m.node.rotation.set(-Math.PI / 2, Math.PI / 2 + yaw, 0);
     } else if (n.act === 'sit') {
       // Сидит на бревне: ближний или дальний круг скамеек у костра
       const fx = tw(LAYOUT.campfire.x), fz = tw(LAYOUT.campfire.y);

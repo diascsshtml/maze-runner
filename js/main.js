@@ -339,6 +339,7 @@ function adjustPost(P) {
 function update(dt) {
   Game.time += dt;
   Game.playTime = (Game.playTime || 0) + dt;
+  updatePlacing();
   if (Lift.active) { updateLift(dt); return; }      // вступление: мир стоит, пока Ящик поднимается
   updateBoxDoors(dt);
   const p = Game.player;
@@ -658,6 +659,7 @@ function cycleQuality() {
 // E: проснуться, отпустить лестницу, подобрать предмет, залезть по лестнице или лечь спать — что уместно рядом
 function action() {
   if (Game.state !== 'play') return;
+  if (Settle.placing) { confirmPlacing(); return; }       // выбор места для дома: E — заложить здесь
   const p = Game.player;
   if (Game.sleeping) { Game.sleeping = false; return; }
   if (p.climb) { p.climb = null; return; }
@@ -1018,6 +1020,11 @@ window.addEventListener('keydown', e => {
     return;
   }
   const play = Game.state === 'play';
+  // Выбор места для дома: R — повернуть, Q или Esc — отменить
+  if (play && Settle.placing) {
+    if (e.code === 'KeyR') { e.preventDefault(); rotatePlacing(); return; }
+    if (act === 'stow' || e.code === 'Escape') { e.preventDefault(); cancelPlacing(); return; }
+  }
   if (act === 'sprint') { Input.sprint = true; return; }
   // Прыжок; спящего он будит, а с лестницы — отпускает, как «действие»
   if (act === 'jump') {
@@ -1048,7 +1055,8 @@ document.addEventListener('visibilitychange', () => {
 let wasLocked = false;
 document.addEventListener('pointerlockchange', () => {
   const locked = !!document.pointerLockElement;
-  if (wasLocked && !locked && Game.state === 'play') togglePause();
+  // Esc во время выбора места только отменяет его — пауза не нужна
+  if (wasLocked && !locked && Game.state === 'play') { if (Settle.placing) cancelPlacing(); else togglePause(); }
   wasLocked = locked;
 });
 
@@ -1060,7 +1068,15 @@ function bindLook() {
     if (Game.state === 'photo') { Photo.shoot = true; return; }
     if (Game.state === 'play' && !document.pointerLockElement) lockPointer();
   });
-  c.addEventListener('pointerdown', e => { drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; });
+  c.addEventListener('pointerdown', e => {
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    // Выбор места для дома: левая кнопка — заложить, правая — отменить
+    if (Game.state === 'play' && Settle.placing && document.pointerLockElement) {
+      if (e.button === 0) confirmPlacing();
+      else if (e.button === 2) cancelPlacing();
+    }
+  });
+  c.addEventListener('contextmenu', e => e.preventDefault());
   window.addEventListener('pointermove', e => {
     if (document.pointerLockElement) {
       Input.lookX += e.movementX || 0;
@@ -1093,10 +1109,11 @@ function bindTouch() {
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, off);
   }
   const sp = $('t-sprint');
-  sp.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); Input.sprint = true; });
+  // Пока выбирают место для дома, «рывок» поворачивает дом, а «пауза» отменяет выбор (на телефоне нет R и Q)
+  sp.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (Settle.placing) rotatePlacing(); else Input.sprint = true; });
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) sp.addEventListener(ev, () => { Input.sprint = false; });
   $('t-action').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); action(); });
-  $('t-pause').addEventListener('click', togglePause);
+  $('t-pause').addEventListener('click', () => { if (Settle.placing) cancelPlacing(); else togglePause(); });
   $('t-bag').addEventListener('click', () => { if (Game.state === 'play' || Panel.open === 'inventory') openInventory(); });
 }
 

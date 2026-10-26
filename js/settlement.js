@@ -1,6 +1,7 @@
 // Поселение. Новая игра начинается в почти пустом Глэйде: Башня-дерево, лес, камни, река и Ящик.
-// Остальное игрок строит на размеченных участках (колышки, верёвка, табличка): закладывает стройку в Совете
-// Глэйда, платит материалы и работает на площадке (E), жители-строители помогают.
+// Дома игрок ставит где хочет (placement.js: выбирает место и поворот), остальное — на размеченных участках
+// (колышки, верёвка, табличка): закладывает стройку в Совете Глэйда, платит материалы и работает на площадке (E),
+// жители-строители помогают.
 // Каждая постройка — своя группа объектов со своими препятствиями, опорами, огнями и предметами (их собирает
 // withStruct, пока строится мир). Пока постройки нет, всё это выключено. В сохранениях без поселения
 // (старые версии игры) Глэйд отстроен целиком, как раньше.
@@ -56,7 +57,7 @@ const SETTLE_AUTO = {
   life_forest: () => Game.npcs.length >= 7,
 };
 
-const Settle = { on: false, built: {}, sites: {}, work: null, plots: {}, siteMeshes: {} };
+const Settle = { on: false, built: {}, sites: {}, place: {}, work: null, plots: {}, siteMeshes: {}, placing: null };
 const STRUCTS = {};
 
 // Всё, что поставят внутри fn, достаётся постройке id: меши, препятствия, опоры, огни, фонари, предметы
@@ -185,7 +186,8 @@ function applyStructs() {
   for (const l of GLADE3D.lanterns) if (l.glow && l.struct) l.glow.visible = isBuilt(l.struct);
   for (const id of Object.keys(SETTLE_DEFS)) {
     const built = isBuilt(id), site = !built && Settle.sites[id];
-    if (!Settle.plots[id] && Settle.on && !built) Settle.plots[id] = makePlot(id);
+    // У домов разметки нет: их место выбирает игрок
+    if (!Settle.plots[id] && Settle.on && !built && !SETTLE_DEFS[id].house) Settle.plots[id] = makePlot(id);
     if (Settle.plots[id]) Settle.plots[id].visible = Settle.on && !built;
     if (site && !Settle.siteMeshes[id]) Settle.siteMeshes[id] = makeSite(id);
     if (Settle.siteMeshes[id]) Settle.siteMeshes[id].visible = !!site;
@@ -211,7 +213,7 @@ function startSite(id) {
   Settle.sites[id] = { t: 0 };
   if (Admin.creative) { finishSite(id); return; }   // креатив: строится сразу
   applyStructs();
-  toast(`Заложена стройка: ${d.name}. Подойди к участку и работай (${keyLabel(Settings.keys.action)}), молоток ускоряет дело.`, 'info');
+  toast(`Заложена стройка: ${d.name}. Подойди к стройке и работай (${keyLabel(Settings.keys.action)}), молоток ускоряет дело.`, 'info');
   Sound.work('hammer', (plotRect(id).x0 + plotRect(id).x1) / 2, 0, (plotRect(id).z0 + plotRect(id).z1) / 2);
 }
 
@@ -257,6 +259,7 @@ function finishSite(id) {
 
 Object.assign(Settle, {
   prompt(p) {
+    if (Settle.placing) return placingPrompt();
     if (!Settle.on) return '';
     const k = keyLabel(Settings.keys.action);
     if (Settle.work) {
@@ -314,8 +317,11 @@ function resetSettle(newGame) {
   Settle.on = !!newGame;
   Settle.built = {};
   Settle.sites = {};
+  Settle.place = {};
   Settle.work = null;
   Settle.autoKey = '';
+  cancelPlacing(true);
+  applyPlacements();
   if (Settle.on) {
     for (const k of ['workshop', 'kitchen', 'storage', 'houses']) Life.lvl[k] = 0;
     // В Ящике вместе с Томасом приехало немного припасов
@@ -324,14 +330,17 @@ function resetSettle(newGame) {
   applyStructs();
 }
 
-function settleSave() { return Settle.on ? { on: true, built: Settle.built, sites: Settle.sites } : null; }
+function settleSave() { return Settle.on ? { on: true, built: Settle.built, sites: Settle.sites, place: Settle.place } : null; }
 function settleLoad(d) {
   Settle.on = !!(d && d.on);
   // Сохранение из прежней версии: Глэйд отстроен, все постройки хотя бы первого уровня
   if (!Settle.on) for (const k of ['workshop', 'kitchen', 'storage', 'houses']) Life.lvl[k] = Math.max(1, Life.lvl[k] || 0);
   Settle.built = (d && d.built) || {};
   Settle.sites = (d && d.sites) || {};
+  Settle.place = (d && d.place) || {};          // где игрок поставил дома (старые сохранения — на местах из планировки)
   Settle.work = null;
+  cancelPlacing(true);
+  applyPlacements();
   applyStructs();
 }
 
@@ -351,8 +360,9 @@ function renderSettleBoard(body) {
       card.append(el('p', 'panel-note', `Работай на участке (${keyLabel(Settings.keys.action)}). Строители помогают днём.`), bar);
     } else if (!isBuilt(id)) {
       const why = siteNeedText(id);
-      card.append(el('p', 'panel-note', `Нужно: ${costText(d.cost)}${why ? ' · ' + why : ''}`));
-      card.append(button('Заложить', () => { startSite(id); refreshPanel(); }, { cls: 'btn small', disabled: !!why || !canPay(d.cost) }));
+      card.append(el('p', 'panel-note', `Нужно: ${costText(d.cost)}${why ? ' · ' + why : ''}${d.house ? ' · место выбираешь сам' : ''}`));
+      if (d.house) card.append(button('Выбрать место', () => startPlacing(id), { cls: 'btn small', disabled: !!why || !canPay(d.cost) }));
+      else card.append(button('Заложить', () => { startSite(id); refreshPanel(); }, { cls: 'btn small', disabled: !!why || !canPay(d.cost) }));
     }
     body.append(card);
   }

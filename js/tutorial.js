@@ -23,7 +23,7 @@ const TUTORIAL_SETTLE = [
   { text: 'Открой Совет Глэйда ({glade}) и заложи костёр: дерево 6, камень 8.', done: () => !!Settle.sites.campfire || isBuilt('campfire') },
   { text: 'Работай на участке костра ({action}), пока он не будет готов. Молоток ускоряет стройку.', done: () => isBuilt('campfire') },
   { text: 'Днём ворота открыты. В Лабиринте лежат металлолом и фрагменты кода — но вернись до заката!', done: () => Tutorial.flags.maze },
-  { text: 'Каждый пятый день Ящик привозит новичка. Строй спальни и столовую — жители помогут с работой.', done: () => (Tutorial.lastT = (Tutorial.lastT || 0) + 1) > 900 },
+  { text: 'Каждый пятый день Ящик привозит новичка. Строй спальни и столовую — дома ставь где хочешь: в Совете «Выбрать место», R — повернуть.', done: () => (Tutorial.lastT = (Tutorial.lastT || 0) + 1) > 900 },
 ];
 const TUTORIAL_KEY = () => Settle.on ? 'maze-runner-tutorial-settle' : 'maze-runner-tutorial';
 function tutorialSteps() { return Settle.on ? TUTORIAL_SETTLE : TUTORIAL_CLASSIC; }
